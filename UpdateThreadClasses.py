@@ -1,5 +1,6 @@
 import os
 import sys
+from datetime import datetime
 import requests
 import tempfile
 from collections import deque
@@ -13,7 +14,7 @@ from PyQt5.QtCore import Qt, QThread, pyqtSignal, QSemaphore
 from qgis.core import QgsMessageLog, Qgis
 
 from .UpdateTAXREF import GetDownloadURL, on_DownloadComplete
-from .UpdateStatus import DownloadStatus, SaveStatus, SaveNewSources
+from .UpdateStatus import run_download, SaveRegionalStatus, SaveNationalStatus, SaveNewSources
 
 class GetURLThread(QThread):
     finished = pyqtSignal(str) # Signal pour indiquer la fin du téléchargement
@@ -82,92 +83,109 @@ class MajTaxrefThread(QThread):
 class GetStatusThread(QThread):
     progress = pyqtSignal(int)
     finished = pyqtSignal()
-    new_length = pyqtSignal(int)
-    download_finish = pyqtSignal()
 
-    def __init__(self, path: str, taxonTitles: list, statusIds: list, save_excel, folder_excel, max_threads: int=4):
+    def __init__(self, path: str, taxonTitles: list, statusIds: list, save_excel, folder_excel, max_threads: int=4, debug: int=0):
         super().__init__()
         self.path = path
         self.listStatusId = statusIds
         self.save_excel = save_excel
         self.folder_excel = folder_excel
         self.taxonTitles = taxonTitles
+        
+        self.debug = debug
 
         self.length_status = []#{title: 0 for title in self.taxonTitles}
         self.listStatusUpdated = []#{title: [] for title in self.taxonTitles}
         #self.download_threads = {}
         self.global_progress = 0
 
-        self.new_length.connect(self.on_new_length)
-
     def run(self):
         # Charger le fichier GeoPackage dans un DataFrame
         self.step = 0
         statusId = self.listStatusId[self.step]
-        # Liste pour stocker les DataFrames mis à jour pour chaque statut
-        #for statusId in self.listStatusId :
-        self.subrun(statusId)
 
-    def subrun(self, statusId):
-        self.download_thread = DownloadStatus(statusId, self.path, self.taxonTitles, self.save_excel, self.folder_excel)
-        #self.download_threads[statusId].download_finished_progress.connect(self.on_download_finished)
-        self.download_thread.progress.connect(self.on_percent_progress) # Met a jour la barre de progression
-        self.download_thread.download_finished.connect(self.on_make_array_finished)
-        self.download_thread.run() # Lance le téléchargement
+        self.pathes_temp_file = []
 
-    """def on_download_finished(self):
-        # Code à exécuter lorsque le signal 'download_finished_progress' est émis
-        self.download_finish.emit()"""
+        for statusId in self.listStatusId:
+            if self.debug > 0 :
+                now = datetime.now()
+                QgsMessageLog.logMessage(f"Pour {statusId}, début de run_doawnload ({now.hour:02}:{now.minute:02}:{now.second:02}.{now.microsecond // 1000:03})", "AutoUpdateTAXREF", level=Qgis.Info)
 
-    def on_percent_progress(self, progress):
-        self.global_progress += progress / len(self.listStatusId)
-        self.progress.emit(int(round(self.global_progress)))
-
-    def on_make_array_finished(self): #, statusArrayOut: pd.DataFrame):
-
-        self.step+=1
-    
-        #self.listStatusUpdated.append(statusArrayOut)
-        #self.length_status = len(self.listStatusUpdated)
-        #self.new_length.emit(self.step)
-        
-        if self.step < len(self.listStatusId):
-            statusId = self.listStatusId[self.step]
-            self.subrun(statusId)
-        elif self.step == len(self.listStatusId):
-            self.new_length.emit(self.step)
-
-    def on_new_length(self, new_length):
-
-        QgsMessageLog.logMessage(f"on_new_length is True : new_length is {new_length} and list length id {len(self.listStatusId)}",
-                                    "AutoUpdateTAXREF", level=Qgis.Info)
-        # Fusionner tous les DataFrames sur les colonnes "Région" et "CD_REF"
-        reversed_dict = {}
-        for title in self.taxonTitles:
-            """df_to_reduce = []
-            for statusId in self.listStatusId:
-                file_path = os.path.join(self.path, f"{title}_{statusId}.gpkg")
-                with gpd.read_file(file_path) as gdf:  # Lecture avec gestion explicite des ressources
-                    df_to_reduce.append(pd.DataFrame(gdf))"""
-
-            df_to_reduce = [pd.DataFrame(
-                gpd.read_file(os.path.join(self.path, f"{title}_{statusId}.gpkg")))
-                for statusId in self.listStatusId]
+            self.pathes_temp_file += run_download(statusId, self.taxonTitles,
+                                                  self.path,
+                                                  self.save_excel, self.folder_excel,
+                                                  debug=self.debug)
             
-            #reversed_dict[title] = [d[title] for d in self.listStatusUpdated if not d[title].empty]
-            statusUpdatedArray = reduce(
-                lambda left, right: pd.merge(left, right, on=["Région", "CD_REF"], how="outer"), df_to_reduce)
-                #reversed_dict[title])
-            QgsMessageLog.logMessage(f"End of reduce on {title}", "AutoUpdateTAXREF", level=Qgis.Info)
+            if self.debug > 0 :
+                now = datetime.now()
+                QgsMessageLog.logMessage(f"Pour {statusId}, fin de run_doawnload ({now.hour:02}:{now.minute:02}:{now.second:02}.{now.microsecond // 1000:03})", "AutoUpdateTAXREF", level=Qgis.Info)
 
-            SaveStatus(statusUpdatedArray, self.path, title)
+            self.global_progress += 100* 1/len(self.listStatusId)
+            self.progress.emit(int(round(self.global_progress)))
+        
+        self.Concat_and_Save()
+        self.finished.emit()
 
-            QgsMessageLog.logMessage(f"End of saving on {title}", "AutoUpdateTAXREF", level=Qgis.Info)            
+    def Concat_and_Save(self):
+
+        if self.debug > 0 :
+                QgsMessageLog.logMessage(f"Start of savings", "AutoUpdateTAXREF", level=Qgis.Info)  
+
+        # Fusionner tous les DataFrames sur les colonnes "Région" et "CD_REF"
+        national_status = ("DH", "DO", "LRN", "PN", "PNA", "PAPNAT")
+        for title in self.taxonTitles:
+
+            if self.debug > 0 :
+                QgsMessageLog.logMessage(f"Start of saving {title} on regional", "AutoUpdateTAXREF", level=Qgis.Info)
+            # Verifier que des statuts non-nationaux sont mis à jour
+            if set(self.listStatusId) - (set(self.listStatusId) & set(national_status)) :
+                # Rassemble les différents tableau en 1 pour chaque taxon
+                df_to_reduce = [pd.DataFrame(
+                    gpd.read_file(os.path.join(self.path, f"{title}_{statusId}.gpkg")))
+                    for statusId in self.listStatusId if not (statusId in national_status)]
+                
+                statusUpdatedArray = reduce(
+                    lambda left, right: pd.merge(left, right, on=["Région", "CD_REF"], how="outer"), df_to_reduce)
+
+                # Sauvegarde les nouvelles colonnes
+                SaveRegionalStatus(statusUpdatedArray, self.path, title)
+
+            if self.debug > 0 :
+                QgsMessageLog.logMessage(f"Start of saving {title} on national", "AutoUpdateTAXREF", level=Qgis.Info)
+            # Vérifier que des statuts nationaux sont mis à jour
+            if set(self.listStatusId) & set(national_status):
+                # Rassemble les différents tableau en 1 pour chaque taxon
+                df_to_reduce = [pd.DataFrame(
+                    gpd.read_file(os.path.join(self.path, f"{title}_{statusId}.gpkg")))
+                    for statusId in self.listStatusId if statusId in national_status]
+            
+                statusUpdatedArray = reduce(
+                    lambda left, right: pd.merge(left, right, on=["CD_REF"], how="outer"), df_to_reduce)
+            
+                # Sauvegarde les nouvelles colonnes
+                SaveNationalStatus(statusUpdatedArray, self.path, title, debug=self.debug)
+
+            if self.debug > 0 :
+                QgsMessageLog.logMessage(f"End of saving on {title}", "AutoUpdateTAXREF", level=Qgis.Info)            
 
             for statusId in self.listStatusId :
+                # Supprime les fichiers temporaires
                 os.remove(os.path.join(self.path, f"{title}_{statusId}.gpkg"))
+        
+        if self.debug > 0 :
+                QgsMessageLog.logMessage(f"End of savings", "AutoUpdateTAXREF", level=Qgis.Info)
 
-        self.finished.emit()
+        return
+
+    def termination_process(self):
+
+        # Supprime les fichier temporaire
+        if self.pathes_temp_file :
+            for path in self.pathes_temp_file:
+                os.remove(path)
+        
+        # Termine le thread de force
+        self.terminate()
 
 class SaveSourcesThread(QThread):
     finished = pyqtSignal()
@@ -179,5 +197,6 @@ class SaveSourcesThread(QThread):
         self.newSources = newSources
 
     def run(self):
+        # Sauvegarde les nouvelles sources
         SaveNewSources(self.path, self.newVer, self.newSources)
         self.finished.emit()

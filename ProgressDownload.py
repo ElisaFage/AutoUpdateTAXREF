@@ -1,283 +1,382 @@
-import os
-import sys
-import requests
-import tempfile
-from collections import deque
-from functools import reduce
-
 import pandas as pd
-import geopandas as gpd
 
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QProgressBar, QPushButton, QLabel
-from PyQt5.QtCore import Qt, QThread, pyqtSignal
+from PyQt5.QtWidgets import (
+    QApplication,  QWidget, QVBoxLayout,
+    QProgressBar, QPushButton, QLabel)
+from PyQt5.QtCore import Qt, pyqtSignal
 from qgis.core import QgsMessageLog, Qgis
 
-from .UpdateThreadClasses2 import GetURLThread, DownloadThread, MajTaxrefThread, GetStatusThread, SaveSourcesThread
+from .UpdateThreadClasses import (
+    GetURLThread,
+    DownloadThread,
+    MajTaxrefThread,
+    GetStatusThread,
+    SaveSourcesThread,
+)
 
 
 class DownloadWindow(QWidget):
+    """
+    Fenêtre de téléchargement et de mise à jour de TAXREF et des statuts.
+
+    Cette fenêtre orchestre plusieurs threads pour :
+      - Récupérer l'URL de téléchargement
+      - Télécharger le fichier TAXREF
+      - Sauvegarder les données TAXREF
+      - Télécharger les statuts
+      - Sauvegarder les sources
+
+    Les paramètres de téléchargement (version, synonymes, etc.) sont définis lors de l'initialisation.
+    """
 
     cancel_requested = pyqtSignal()  # Signal pour annuler les threads
-
     download_finished = pyqtSignal()
-    version=None
-    taxonTitles = ["Flore", "Amphibiens", "Reptiles", "Oiseaux", "Mammifères", "Lépidoptères", "Odonates", "Coléoptères", "Orthoptères"]
-    taxonRegnes = ["Plantae", "Animalia", "Animalia", "Animalia", "Animalia", "Animalia", "Animalia", "Animalia", "Animalia"]
-    taxonGroupes1 = [["Algues", "Trachéophytes", "Bryophytes"],
-                ["Chordés"], ["Chordés"], ["Chordés"], ["Chordés"],
-                ["Arthropodes"], ["Arthropodes"], ["Arthropodes"], ["Arthropodes"]]
-    taxonGroupes2 = [[""],
-                     ["Amphibiens"], ["Reptiles"], ["Oiseaux"], ["Mammifères"],
-                     ["Insectes"], ["Insectes"], ["Insectes"], ["Insectes"]]
-    taxonGroupes3 = [[""],
-                     [""], [""], [""], [""],
-                     ["Lépidoptères"], ["Odonates"], ["Coléoptères"], ["Orthoptères"]]
-    taxonFamille = [[""],
-                    [""], [""], [""], [""],
-                    ["Papilionidae", "Pieridae", "Nymphalidae", "Satyrinae", "Lycaenidae", "Hesperiidae", "Zygaenidae"], [""], ["Carabidae", "Hydrophilidae", "Sphaeritidae", "Histeridae", "Ptiliidae", "Agyrtidae", "Leiodidae", "Staphylinidae", "Lucanidae", "Trogidae", "Scarabaeidae", "Eucinetidae", "Clambidae", "Scirtidae", "Buprestidae", "Elmidae", "Dryopidae", "Cerophytidae", "Eucnemidae", "Throscidae", "Elateridae", "Lycidae", "Cantharidae", "Derodontidae", "Nosodendridae", "Dermestidae", "Endecatomidae", "Bostrichidae", "Ptinidae", "Lymexylidae", "Phloiophilidae", "Trogossitidae", "Thanerocleridae", "Cleridae", "Acanthocnemidae", "Melyridae", "Malachiidae", "Sphindidae", "Nitidulidae", "Monotomidae", "Phloeostichidae", "Silvanidae", "Cucujidae", "Laemophloeidae", "Cryptophagidae", "Erotylidae", "Biphyllidae", "Bothrideridae", "Cerylonidae", "Alexiidae", "Endomychidae", "Corylophidae", "Latridiidae", "Mycetophagidae", "Ciidae", "Tetratomidae", "Melandryidae", "Zopheridae", "Mordellidae", "Tenebrionidae", "Prostomidae", "Oedemeridae", "Pythidae", "Pyrochroidae", "Salpingidae", "Aderidae", "Scraptiidae", "Cerambycidae", "Chrysomelidae", "Anthribidae", "Brentidae", "Dryophthoridae", "Curculionidae"], ["Acrididae", "Gryllidae", "Gryllotalpidae", "Mogoplistida", "Myrmecophilidae", "Pamphagidae", "Phalangopsidae", "Pyrgomorphidae", "Rhaphidophoridae", "Tetrigidae", "Tettigoniidae", "Tridactylidae", "Trigonidiidae"]]
-    
-    #statusIds = ["DH", "DO", "PN", "PR", "PD", "LRN", "LRR", "PNA", "PAPNAT", "ZDET", "REGLLUTTE"]
 
-    def __init__(self,
-                 path: str, statusIds: list,
-                 version: int=None,
-                 synonyme:bool=False,
-                 new_version: bool=False,
-                 new_status: bool=False,
-                 new_sources: pd.DataFrame=pd.DataFrame(columns=["id", "fullCitation"]),
-                 save_excel: bool=False,
-                 folder: str="",
-                 faune: bool=True,
-                 flore: bool=True,
-                 debug: int=0):
-        
+    # Attributs de classe définissant les taxons
+    version = None
+    taxon_titles = [
+        "Flore", "Amphibiens", "Reptiles", "Oiseaux", "Mammifères",
+        "Lépidoptères", "Odonates", "Coléoptères", "Orthoptères"
+    ]
+    taxon_regnes = [
+        "Plantae", "Animalia", "Animalia", "Animalia", "Animalia",
+        "Animalia", "Animalia", "Animalia", "Animalia"
+    ]
+    taxon_groupes_1 = [
+        ["Algues", "Trachéophytes", "Bryophytes"],
+        ["Chordés"], ["Chordés"], ["Chordés"], ["Chordés"],
+        ["Arthropodes"], ["Arthropodes"], ["Arthropodes"], ["Arthropodes"]
+    ]
+    taxon_groupes_2 = [
+        [""],
+        ["Amphibiens"], ["Reptiles"], ["Oiseaux"], ["Mammifères"],
+        ["Insectes"], ["Insectes"], ["Insectes"], ["Insectes"]
+    ]
+    taxon_groupes_3 = [
+        [""],
+        [""], [""], [""], [""],
+        ["Lépidoptères"], ["Odonates"], ["Coléoptères"], ["Orthoptères"]
+    ]
+    taxon_famille = [
+        [""],
+        [""], [""], [""], [""],
+        [
+            "Papilionidae", "Pieridae", "Nymphalidae", "Satyrinae",
+            "Lycaenidae", "Hesperiidae", "Zygaenidae"
+        ],
+        [""],
+        [
+            "Carabidae", "Hydrophilidae", "Sphaeritidae", "Histeridae",
+            "Ptiliidae", "Agyrtidae", "Leiodidae", "Staphylinidae",
+            "Lucanidae", "Trogidae", "Scarabaeidae", "Eucinetidae",
+            "Clambidae", "Scirtidae", "Buprestidae", "Elmidae", "Dryopidae",
+            "Cerophytidae", "Eucnemidae", "Throscidae", "Elateridae",
+            "Lycidae", "Cantharidae", "Derodontidae", "Nosodendridae",
+            "Dermestidae", "Endecatomidae", "Bostrichidae", "Ptinidae",
+            "Lymexylidae", "Phloiophilidae", "Trogossitidae", "Thanerocleridae",
+            "Cleridae", "Acanthocnemidae", "Melyridae", "Malachiidae",
+            "Sphindidae", "Nitidulidae", "Monotomidae", "Phloeostichidae",
+            "Silvanidae", "Cucujidae", "Laemophloeidae", "Cryptophagidae",
+            "Erotylidae", "Biphyllidae", "Bothrideridae", "Cerylonidae",
+            "Alexiidae", "Endomychidae", "Corylophidae", "Latridiidae",
+            "Mycetophagidae", "Ciidae", "Tetratomidae", "Melandryidae",
+            "Zopheridae", "Mordellidae", "Tenebrionidae", "Prostomidae",
+            "Oedemeridae", "Pythidae", "Pyrochroidae", "Salpingidae",
+            "Aderidae", "Scraptiidae", "Cerambycidae", "Chrysomelidae",
+            "Anthribidae", "Brentidae", "Dryophthoridae", "Curculionidae"
+        ],
+        [
+            "Acrididae", "Gryllidae", "Gryllotalpidae", "Mogoplistida",
+            "Myrmecophilidae", "Pamphagidae", "Phalangopsidae",
+            "Pyrgomorphidae", "Rhaphidophoridae", "Tetrigidae",
+            "Tettigoniidae", "Tridactylidae", "Trigonidiidae"
+        ]
+    ]
+
+    def __init__(self, path: str, status_ids: list,
+                 version: int = None,
+                 synonyme: bool = False,
+                 new_version: bool = False,
+                 new_status: bool = False,
+                 new_sources: pd.DataFrame = pd.DataFrame(columns=["id", "fullCitation"]),
+                 save_excel: bool = False,
+                 folder: str = "",
+                 faune: bool = True,
+                 flore: bool = True,
+                 debug: int = 0):
+        """
+        Initialise la fenêtre de téléchargement de TAXREF.
+
+        :param path: Chemin de sauvegarde.
+        :param status_ids: Liste des identifiants de statut.
+        :param version: Version du fichier TAXREF.
+        :param synonyme: Prise en compte des synonymes.
+        :param new_version: Indique si une nouvelle version doit être téléchargée.
+        :param new_status: Indique si les statuts doivent être mis à jour.
+        :param new_sources: DataFrame contenant les nouvelles sources.
+        :param save_excel: Sauvegarde dans un fichier Excel.
+        :param folder: Dossier de sauvegarde du fichier Excel.
+        :param faune: Téléchargement des données de faune si True.
+        :param flore: Téléchargement des données de flore si True.
+        :param debug: Niveau de débogage.
+        """
         super().__init__()
-        self.version = version
-        self.save_path = path
-        self.statusIds = statusIds
-        self.synonyme = synonyme
 
+        # Définition des paramètres
+        self.save_path = path
+        self.status_ids = status_ids
+        self.version = version
+        self.synonyme = synonyme
         self.new_version = new_version
         self.new_status = new_status
         self.new_sources = new_sources
         self.save_excel = save_excel
         self.folder_excel = folder
-
-        if not faune :
-            indices = [i for i, regne in enumerate(self.taxonRegnes) if regne == "Animalia"]
-            self.taxonTitles = [val for i, val in enumerate(self.taxonTitles) if i not in indices]
-            self.taxonRegnes = [val for i, val in enumerate(self.taxonRegnes) if i not in indices]
-            self.taxonGroupes1 = [val for i, val in enumerate(self.taxonGroupes1) if i not in indices]
-            self.taxonGroupes2 = [val for i, val in enumerate(self.taxonGroupes2) if i not in indices]
-            self.taxonGroupes3 = [val for i, val in enumerate(self.taxonGroupes3) if i not in indices]
-            self.taxonFamille = [val for i, val in enumerate(self.taxonFamille) if i not in indices]
-            
-
-        if not flore :
-            indices = [i for i, regne in enumerate(self.taxonRegnes) if regne == "Plantae"]
-            self.taxonTitles = [val for i, val in enumerate(self.taxonTitles) if i not in indices]
-            self.taxonRegnes = [val for i, val in enumerate(self.taxonRegnes) if i not in indices]
-            self.taxonGroupes1 = [val for i, val in enumerate(self.taxonGroupes1) if i not in indices]
-            self.taxonGroupes2 = [val for i, val in enumerate(self.taxonGroupes2) if i not in indices]
-            self.taxonGroupes3 = [val for i, val in enumerate(self.taxonGroupes3) if i not in indices]
-            self.taxonFamille = [val for i, val in enumerate(self.taxonFamille) if i not in indices]
-
         self.debug = debug
-
-        self.file_path = None  # Initialiser le chemin du fichier temporaire
-        self.status_df = None # Initialiser le dataFrame de status
-        self.step=0
+        
+        # Initialisation des attributs de suivi
+        self.file_path = None
+        self.status_df = None
         self.status_download_counter = 0
-        self.status_counter=0
+        self.status_counter = 0
 
-        # Configuration de la fenêtre
-        self.setWindowTitle('Mise à jour de TAXREF et des statuts')
+        # Compteurs et suivi d'étapes
+        self.current_step = 0
+        self.total_steps = 6 if new_version else 3 if new_status else 1
+
+        # Filtrer les taxons selon les paramètres 'faune' et 'flore'
+        if not faune:
+            self._filter_taxa("Animalia")
+
+        if not flore:
+            self._filter_taxa("Plantae")
+
+        self._setup_ui()
+
+        # Démarrage initial selon les paramètres
+        if new_version:
+            self._start_get_url()
+        elif new_status:
+            self._start_download_status()
+        else:
+            self._start_save_sources()
+
+    def _filter_taxa(self, regne: str):
+        """Filtrer les taxons par règne."""
+        indices = [i for i, r in enumerate(self.taxon_regnes) if r == regne]
+        for attr in ['taxon_titles', 'taxon_regnes', 'taxon_groupes_1',
+                     'taxon_groupes_2', 'taxon_groupes_3', 'taxon_famille']:
+            setattr(self, attr, [v for i, v in enumerate(getattr(self, attr)) if i not in indices])
+
+    def _setup_ui(self):
+        """Configurer l'interface utilisateur."""
+        self.setWindowTitle('Mise à jour TAXREF et statuts')
         self.setGeometry(300, 300, 400, 200)
 
-        # Layout et widgets
         layout = QVBoxLayout()
 
-        # Ajout de la deuxième barre de progression
-        # Label et barre de progression secondaire
-        self.progressLabelSecondary = QLabel("Progression globale (étapes)")
-        layout.addWidget(self.progressLabelSecondary)
-        self.progressBarSecondary = QProgressBar(self)
-        self.progressBarSecondary.setAlignment(Qt.AlignCenter)
-        layout.addWidget(self.progressBarSecondary)
+        # Configuration barre de progression globale
+        self.global_progress_label = QLabel("Progression globale")
+        layout.addWidget(self.global_progress_label)
+        self.global_progress_bar = QProgressBar(self)
+        layout.addWidget(self.global_progress_bar)
 
-        if self.new_version == True or self.new_status == True :
-            self.progressLabel = QLabel("En attente du téléchargement")
-            layout.addWidget(self.progressLabel)
-            self.progressBar = QProgressBar(self)
-            self.progressBar.setAlignment(Qt.AlignCenter)
-            layout.addWidget(self.progressBar)
-            # Bouton Annuler
-            self.cancel_button = QPushButton("Annuler")
-            self.cancel_button.clicked.connect(self.cancel_process)
-            layout.addWidget(self.cancel_button)
+        # Configuration barre de progression des étapes
+        self.current_step_progress_label = QLabel("En attente...")
+        layout.addWidget(self.current_step_progress_label)
+        self.current_step_progress_bar = QProgressBar(self)
+        layout.addWidget(self.current_step_progress_bar)
 
-            if new_version == True :
-                self.n_step = 6
-                self.start_getURL()
-            elif new_status == True:
-                self.n_step = 3
-                self.start_download_status()
-        else :
-            # Bouton Annuler
-            self.cancel_button = QPushButton("Annuler")
-            self.cancel_button.clicked.connect(self.cancel_process)
-            layout.addWidget(self.cancel_button)
-            QgsMessageLog.logMessage(f"In else", "AutoUpdateTAXREF", level=Qgis.Info)
-            self.n_step = 1
-            self.start_save_sources()
+        # Bouton annuler
+        self.cancel_button = QPushButton("Annuler")
+        self.cancel_button.clicked.connect(self.cancel_process)
+        layout.addWidget(self.cancel_button)
 
         self.setLayout(layout)
 
     def cancel_process(self):
-        """Déclenche l'annulation."""
+        """
+        Annule le processus de téléchargement et ferme la fenêtre.
+        """
         self.cancel_flag = True
-        self.cancel_requested.emit()  # Émet un signal pour annuler les threads
+        self.cancel_requested.emit()  # Émet un signal pour annuler les threads en cours
         self.update_progress_text("Annulation en cours...")
         self.close()
 
     def update_progress_text(self, text):
-        """Met à jour le texte du label principal."""
+        """
+        Met à jour le texte du label principal.
+
+        :param text: Texte à afficher.
+        """
         if hasattr(self, 'progressLabel'):
             self.progressLabel.setText(text)
 
     def update_secondary_progress_text(self, text):
-        """Met à jour le texte du label secondaire."""
+        """
+        Met à jour le texte du label secondaire.
+
+        :param text: Texte à afficher.
+        """
         if hasattr(self, 'progressLabelSecondary'):
             self.progressLabelSecondary.setText(text)
 
     def start_getURL(self):
-
+        """
+        Démarre le thread permettant de récupérer l'URL de téléchargement.
+        """
         self.geturl_thread = GetURLThread(self.version)
         self.geturl_thread.finished.connect(self.url_found)
-        self.cancel_requested.connect(self.geturl_thread.terminate)  # Connecte l'annulation
-        self.update_secondary_progress_text(f"Progression globale (étapes {int(self.step+1)}/{self.n_step})")
+        self.cancel_requested.connect(self.geturl_thread.terminate)  # Connecte le signal d'annulation
+        self.update_secondary_progress_text(
+            f"Progression globale (étapes {int(self.current_step + 1)}/{self.n_step})"
+        )
         self.geturl_thread.start()
 
     def url_found(self, url):
-        
-        self.url = url
-        self.step += 1
-        self.secondary_progress_value = int(round(100*self.step/self.n_step))
-        self.progressBarSecondary.setValue(self.secondary_progress_value)
+        """
+        Callback appelé lorsque l'URL de téléchargement est récupérée.
 
-        if self.secondary_progress_value >= 100:
-            self.secondary_progress_value = 100
+        :param url: URL récupérée.
+        """
+        self.url = url
+        self.current_step += 1
+        secondary_progress_value = int(round(100 * self.current_step / self.n_step))
+        self.progressBarSecondary.setValue(secondary_progress_value)
+
+        if secondary_progress_value >= 100:
+            self.progressBarSecondary.setValue(100)
             self.close()
+            return
 
         self.start_download()
 
     def start_download(self):
-        #self.download_button.setEnabled(False)  # Désactive le bouton pendant le téléchargement
-
-        # Lancer le téléchargement dans un thread séparé
+        """
+        Démarre le thread de téléchargement du fichier TAXREF.
+        """
         self.download_thread = DownloadThread(self.url)
-        self.download_thread.progress.connect(self.progressBar.setValue)  # Connecter la progression à la barre principale
-        self.download_thread.finished.connect(self.download_complete)  # Quand terminé, on appelle download_complete
+        self.download_thread.progress.connect(self.progressBar.setValue)
+        self.download_thread.finished.connect(self.download_complete)
         self.cancel_requested.connect(self.download_thread.terminate)
-        self.update_secondary_progress_text(f"Progression globale (étapes {int(self.step+1)}/{self.n_step})")
+        self.update_secondary_progress_text(
+            f"Progression globale (étapes {int(self.current_step + 1)}/{self.n_step})"
+        )
         self.update_progress_text("Téléchargement de TAXREF en cours...")
         self.download_thread.start()
 
     def download_complete(self, file_path):
-        #self.download_button.setEnabled(True)
+        """
+        Callback appelé lorsque le téléchargement est terminé.
+
+        :param file_path: Chemin du fichier téléchargé.
+        """
         self.file_path = file_path
-        self.progressBar.setValue(100)  # Marquer la barre comme complète
+        self.progressBar.setValue(100)
         self.update_progress_text("Téléchargement de TAXREF terminé")
-        #self.download_finished.emit(file_path)
 
-        # Incrémentation de la deuxième barre de progression (1 étape sur 3)
-        self.step += 1
-        self.secondary_progress_value = int(round((100*self.step/self.n_step)))
-        self.progressBarSecondary.setValue(self.secondary_progress_value)
+        # Mise à jour de la progression secondaire
+        self.current_step += 1
+        secondary_progress_value = int(round(100 * self.current_step / self.n_step))
+        self.progressBarSecondary.setValue(secondary_progress_value)
 
-        if self.secondary_progress_value >= 100:
-            self.secondary_progress_value = 100  # Limiter la valeur de la barre à 100%
+        if secondary_progress_value >= 100:
+            self.progressBarSecondary.setValue(100)
             self.close()
+            return
 
         self.start_save_taxref()
 
     def start_save_taxref(self):
-
-        self.majtaxref_thread = MajTaxrefThread(self.file_path, self.version,
-                                                self.taxonTitles, self.taxonRegnes,
-                                                self.taxonGroupes1, self.taxonGroupes2,
-                                                self.taxonGroupes3, self.taxonFamille,
-                                                self.save_path, self.synonyme)
+        """
+        Démarre le thread de sauvegarde des données TAXREF.
+        """
+        self.majtaxref_thread = MajTaxrefThread(
+            self.file_path,
+            self.version,
+            self.taxon_titles,
+            self.taxon_regnes,
+            self.taxon_groupes_1,
+            self.taxon_groupes_2,
+            self.taxon_groupes_3,
+            self.taxon_famille,
+            self.save_path,
+            self.synonyme
+        )
         self.majtaxref_thread.finished.connect(self.taxref_saved)
         self.cancel_requested.connect(self.majtaxref_thread.terminate)
-        self.update_secondary_progress_text(f"Progression globale (étapes {int(self.step+1)}/{self.n_step})")
+        self.update_secondary_progress_text(
+            f"Progression globale (étapes {int(self.current_step + 1)}/{self.n_step})"
+        )
         self.majtaxref_thread.start()
 
     def taxref_saved(self):
-        self.step += 1
-        self.secondary_progress_value = int(round(100*self.step/self.n_step))
-        self.progressBarSecondary.setValue(self.secondary_progress_value)
+        """
+        Callback appelé lorsque l'enregistrement des données TAXREF est terminé.
+        """
+        self.current_step += 1
+        secondary_progress_value = int(round(100 * self.current_step / self.n_step))
+        self.progressBarSecondary.setValue(secondary_progress_value)
 
-        if self.secondary_progress_value >= 100:
-            self.secondary_progress_value = 100 # Limiter la valeur de la barre à 100%
+        if secondary_progress_value >= 100:
+            self.progressBarSecondary.setValue(100)
             self.close()
+            return
 
         self.start_download_status()
 
     def start_download_status(self):
-
-        self.get_status_thread = GetStatusThread(self.save_path,
-                                                 self.taxonTitles, self.statusIds,
-                                                 self.save_excel, self.folder_excel,
-                                                 debug=self.debug)
+        """
+        Démarre le thread de téléchargement des statuts.
+        """
+        self.get_status_thread = GetStatusThread(
+            self.save_path,
+            self.taxon_titles,
+            self.status_ids,
+            self.save_excel,
+            self.folder_excel,
+            debug=self.debug
+        )
         self.get_status_thread.progress.connect(self.progressBar.setValue)
-        #self.get_status_thread.download_finish.connect(self.on_status_download_finished)
         self.get_status_thread.finished.connect(self.start_save_sources)
         self.cancel_requested.connect(self.get_status_thread.termination_process)
-        self.update_secondary_progress_text(f"Progression globale (étapes {int(self.step+1)}/{self.n_step})")
+        self.update_secondary_progress_text(
+            f"Progression globale (étapes {int(self.current_step + 1)}/{self.n_step})"
+        )
         self.update_progress_text("Téléchargement des statuts en cours...")
         self.get_status_thread.start()
-    
+
     def start_save_sources(self):
-
-        self.step += 1
-
-        self.secondary_progress_value = int(round(100*self.step/self.n_step))
-        self.progressBarSecondary.setValue(self.secondary_progress_value)
+        """
+        Démarre le thread de sauvegarde des sources.
+        """
+        self.current_step += 1
+        secondary_progress_value = int(round(100 * self.current_step / self.n_step))
+        self.progressBarSecondary.setValue(secondary_progress_value)
         self.update_progress_text("Téléchargement des statuts terminé")
 
-        QgsMessageLog.logMessage(f"In start save sources", "AutoUpdateTAXREF", level=Qgis.Info)
-        self.save_sources_thread = SaveSourcesThread(self.save_path, self.new_version, self.new_sources)
+        QgsMessageLog.logMessage("In start save sources", "AutoUpdateTAXREF", level=Qgis.Info)
+        self.save_sources_thread = SaveSourcesThread(
+            self.save_path, self.new_version, self.new_sources
+        )
         self.save_sources_thread.finished.connect(self.sources_saved)
         self.cancel_requested.connect(self.save_sources_thread.terminate)
-        self.update_secondary_progress_text(f"Progression globale (étapes {int(self.step+1)}/{self.n_step})")
+        self.update_secondary_progress_text(
+            f"Progression globale (étapes {int(self.current_step + 1)}/{self.n_step})"
+        )
         self.save_sources_thread.start()
 
     def sources_saved(self):
+        """
+        Callback appelé lorsque l'enregistrement des sources est terminé.
+        """
+        QgsMessageLog.logMessage("In sources saved", "AutoUpdateTAXREF", level=Qgis.Info)
+        self.current_step += 1
+        secondary_progress_value = int(round(100 * self.current_step / self.n_step))
+        self.progressBarSecondary.setValue(secondary_progress_value)
 
-        QgsMessageLog.logMessage(f"In sources saved", "AutoUpdateTAXREF", level=Qgis.Info)
-        self.step += 1
-        self.secondary_progress_value = int(round(100*self.step/self.n_step))
-        self.progressBarSecondary.setValue(self.secondary_progress_value)
-
-        if self.secondary_progress_value >= 100:
-            self.secondary_progress_value = 100
+        if secondary_progress_value >= 100:
+            self.progressBarSecondary.setValue(100)
             self.close()
-        self.close()
-
-class DownloadWindowTest(QWidget):
-    def __init__(self):
-        super().__init__()
-        self.setWindowTitle('Test Download Window')
-        self.setGeometry(300, 300, 200, 100)
-        layout = QVBoxLayout()
-        layout.addWidget(QLabel("Test de la fenêtre"))
-        self.setLayout(layout)
-
-# Exemple d'utilisation
-if __name__ == '__main__':
-    app = QApplication(sys.argv)  # Remplacez par votre URL de fichier ZIP
-    window = DownloadWindow()
-    window.show()
-    downloaded_file_path = window.file_path
-    sys.exit(app.exec_())
+        else:
+            self.close()
