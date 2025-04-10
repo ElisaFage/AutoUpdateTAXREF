@@ -4,13 +4,10 @@ from PyQt5.QtCore import Qt, QThread, pyqtSignal
 
 import pandas as pd
 
-from .GetVersions import Recup_my_version, Recup_current_version
-from .MessageBoxes import AskUpdate
+from .GetVersions import recup_my_version, recup_current_version
 
-from .UpdateSearchStatus import CheckUpdateStatus
-from .UpdateStatusDialog import UpdateStatusDialog, SaveXlsxDialog
-
-from .ProgressDownload import DownloadWindow, DownloadWindowTest
+from .UpdateSearchStatus import check_update_status
+from .UpdateStatusDialog import UpdateStatusDialog, ask_update, ask_save_excel
 
 class UpdateInitThread(QThread):
     """
@@ -71,14 +68,14 @@ class UpdateInitThread(QThread):
         Propose à l'utilisateur de mettre à jour si nécessaire et émet les résultats.
         """
         # Récupération de la version actuelle locale
-        self.my_version = Recup_my_version(self.path)
+        self.my_version = recup_my_version(self.path)
         if self.debug > 0:
             QgsMessageLog.logMessage(
                 f"Ma version: {self.my_version}", "AutoUpdateTAXREF", level=Qgis.Info
             )
 
         # Récupération de la version actuelle en ligne
-        self.current_version = Recup_current_version()
+        self.current_version = recup_current_version()
         if self.debug > 0:
             QgsMessageLog.logMessage(
                 f"Dernière version: {self.current_version}", "AutoUpdateTAXREF", level=Qgis.Info
@@ -87,13 +84,14 @@ class UpdateInitThread(QThread):
         # Vérification si une mise à jour de la version est nécessaire
         if self.my_version != self.current_version:
             self.new_version = True
-            self.do_update = AskUpdate(self.current_version)
+            self.do_update = ask_update(self.current_version)
             if self.do_update:
-                self.save_excel, self.folder = self.AskSaveExcel()
+                self.ask_save_excel = ask_save_excel
+                self.save_excel, self.folder = self.ask_save_excel()
             print(self.do_update)
         else:
             # Vérification s'il existe de nouvelles sources nécessitant une mise à jour des statuts
-            self.new_sources = CheckUpdateStatus(self.path)
+            self.new_sources = check_update_status(self.path)
             if not self.new_sources.empty:
                 text_lines = self.new_sources["fullCitation"].to_list()
                 self.status_dialog = UpdateStatusDialog(text_lines, self.status_ids)
@@ -113,7 +111,8 @@ class UpdateInitThread(QThread):
                         self.do_update = True
                     if self.status_dialog.user_response:
                         self.local_status_ids = list(self.status_dialog.selected_statuses)
-                        self.save_excel, self.folder = self.AskSaveExcel()
+                        self.ask_save_excel = ask_save_excel
+                        self.save_excel, self.folder = self.ask_save_excel()
 
         # Émission des résultats via le signal
         self.finished.emit(
@@ -131,28 +130,4 @@ class UpdateInitThread(QThread):
             self.flore,
             self.debug,
         )
-
-    def AskSaveExcel(self):
-        """
-        Demande à l'utilisateur s'il souhaite enregistrer les résultats dans un fichier Excel.
-        Ouvre une boîte de dialogue pour choisir le dossier de sauvegarde si l'utilisateur accepte.
-
-        Returns:
-            tuple: Un tuple contenant un booléen indiquant la décision de sauvegarde et le chemin du dossier choisi.
-        """
-        # Création et affichage de la boîte de dialogue pour demander la sauvegarde Excel
-        self.save_excel_dialog = SaveXlsxDialog()
-        save_dialog_result = self.save_excel_dialog.exec()
-
-        # Récupération de la réponse utilisateur
-        save_excel = self.save_excel_dialog.user_response
-
-        # Sélection du dossier de sauvegarde uniquement si accepté par l'utilisateur
-        folder = (
-            QFileDialog.getExistingDirectory(None, "Sélectionnez un dossier pour sauvegarder le fichier")
-            if save_dialog_result == QDialog.Accepted and save_excel
-            else ""
-        )
-
-        return save_excel, folder
     
