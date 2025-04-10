@@ -8,7 +8,7 @@ from urllib.request import urlopen, urlretrieve
 
 
 # Récupérer la version actuelle du fichier local
-def Recup_my_version(path: str):
+def recup_my_version(path: str):
 
     taxonTitles = ["Flore", "Amphibiens", "Reptiles", "Oiseaux", "Mammifères", "Lépidoptères", "Odonates", "Coléoptères", "Orthoptères"]
     
@@ -27,7 +27,7 @@ def Recup_my_version(path: str):
     return np.min(all_versions)
 
 # Récupérer la version actuelle du TAXREF depuis l'API
-def Recup_current_version():
+def recup_current_version():
     url = "https://taxref.mnhn.fr/api/taxrefVersions/current"
     response = urlopen(url)
     data_json = json.loads(response.read()) # Lire les données JSON
