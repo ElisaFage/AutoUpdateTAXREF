@@ -9,7 +9,7 @@ from qgis.core import QgsMessageLog, Qgis
 from datetime import date
 
 # Récupère les source de l'année {year}
-def GetSourcesFromYear(year: int)->pd.DataFrame:
+def get_sources_from_year(year: int)->pd.DataFrame:
 
     url = f"https://taxref.mnhn.fr/api/sources/findByTerm/{year}"
 
@@ -29,7 +29,7 @@ def GetSourcesFromYear(year: int)->pd.DataFrame:
     return df_sources
 
 # Compare les listes de sources
-def CheckNewSources(mySources: pd.DataFrame, currentSources: pd.DataFrame, file_path: str)->pd.DataFrame:
+def check_new_sources(mySources: pd.DataFrame, currentSources: pd.DataFrame, file_path: str)->pd.DataFrame:
 
     # Trouver les éléments absents
     ids_absents = currentSources[~currentSources['id'].astype(str).isin(mySources['id'].astype(str).values)]
@@ -44,7 +44,7 @@ def CheckNewSources(mySources: pd.DataFrame, currentSources: pd.DataFrame, file_
     return ids_absents
 
 # Chreche s'il y a de nouvelles source pour faire une mise à jour
-def CheckUpdateStatus(path: str, debug: int=0)->pd.DataFrame:
+def check_update_status(path: str, debug: int=0)->pd.DataFrame:
 
     current_year = date.today().year
 
@@ -60,10 +60,10 @@ def CheckUpdateStatus(path: str, debug: int=0)->pd.DataFrame:
     else : 
         mySources = pd.DataFrame(columns=["id", "fullCitation"])
         
-    currentSources = pd.concat([GetSourcesFromYear(current_year),
-                                GetSourcesFromYear(current_year-1)], ignore_index=True)
+    currentSources = pd.concat([get_sources_from_year(current_year),
+                                get_sources_from_year(current_year-1)], ignore_index=True)
 
-    ids_absents = CheckNewSources(mySources, currentSources, file_path)
+    ids_absents = check_new_sources(mySources, currentSources, file_path)
 
     newSources = currentSources[currentSources["id"].astype(str).isin(ids_absents["id"].astype(str).values)][["id", "fullCitation"]].copy()
 

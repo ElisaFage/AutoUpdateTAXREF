@@ -11,7 +11,7 @@ from datetime import datetime, date
 
 from qgis.core import QgsMessageLog, Qgis
 
-from .UpdateSearchStatus import GetSourcesFromYear
+from .UpdateSearchStatus import get_sources_from_year
 
 # Télécharge les fichier JSON des status et les charge dans un dataframe pandas
 """
@@ -126,14 +126,14 @@ def filter_by_keyword(lrn_string: str, keyword: str):
         return ""
     return ";".join([portion.replace(f" : {keyword}", "") for portion in lrn_string.split(";") if keyword in portion])
 
-def MakeStatusArray(statusId: str,
+def make_status_array(statusId: str,
                     taxonTitle: str, status_array_in: pd.DataFrame,
                     save_excel: bool, folder_excel: str,
                     debug: int=0):
 
     if debug > 1 :
         now = datetime.now()
-        QgsMessageLog.logMessage(f"Pour {statusId} au taxon {taxonTitle}, début de MakeStatusArray ({now.hour:02}:{now.minute:02}:{now.second:02}.{now.microsecond // 1000:03})", "AutoUpdateTAXREF", level=Qgis.Info)
+        QgsMessageLog.logMessage(f"Pour {statusId} au taxon {taxonTitle}, début de make_status_array ({now.hour:02}:{now.minute:02}:{now.second:02}.{now.microsecond // 1000:03})", "AutoUpdateTAXREF", level=Qgis.Info)
 
     regions = {"Auvergne" : ["Auvergne-Rhône-Alpes", "Allier", "Cantal", "Haute-Loire", "Puy-de-Dôme"],
                         "Rhône-Alpes":["Auvergne-Rhône-Alpes", "Ain", "Ardèche", "Drôme", "Isère", "Loire", "Rhône", "Savoie", "Haute-Savoie"],
@@ -248,7 +248,7 @@ def MakeStatusArray(statusId: str,
 
     if debug > 1 :
         now = datetime.now()
-        QgsMessageLog.logMessage(f"Pour {statusId} au taxon {taxonTitle}, fin de MakeStatusArray ({now.hour:02}:{now.minute:02}:{now.second:02}.{now.microsecond // 1000:03})", "AutoUpdateTAXREF", level=Qgis.Info)
+        QgsMessageLog.logMessage(f"Pour {statusId} au taxon {taxonTitle}, fin de make_status_array ({now.hour:02}:{now.minute:02}:{now.second:02}.{now.microsecond // 1000:03})", "AutoUpdateTAXREF", level=Qgis.Info)
 
     if taxonTitle == "Flore":
         QgsMessageLog.logMessage(f"Colonne de StatusArrayOut : {statusArrayOut.columns}", "AutoUpdateTAXREF", level=Qgis.Info)
@@ -293,7 +293,7 @@ def run_download(statusId: str, taxonTitles: list, path: str, save_excel: bool, 
         #QgsMessageLog.logMessage(f"longueur df 1: {len(dict_df_filter[key])}", "AutoUpdateTAXREF", level=Qgis.Info)
         if len(dict_df_filter[key]) != 0:
             dict_makeArray_out[key].append(
-                MakeStatusArray(statusId, key, dict_df_filter[key], save_excel, folder_excel, debug=debug))
+                make_status_array(statusId, key, dict_df_filter[key], save_excel, folder_excel, debug=debug))
 
     # Boucle pour télécharger chaque page
     for i in range(2, total_pages + 1):
@@ -322,7 +322,7 @@ def run_download(statusId: str, taxonTitles: list, path: str, save_excel: bool, 
             #QgsMessageLog.logMessage(f"longueur df {i}: {len(dict_df_filter[key])}", "AutoUpdateTAXREF", level=Qgis.Info)
             if len(dict_df_filter[key]) != 0:
                 dict_makeArray_out[key].append(
-                    MakeStatusArray(statusId, key, dict_df_filter[key], save_excel, folder_excel, debug=debug))
+                    make_status_array(statusId, key, dict_df_filter[key], save_excel, folder_excel, debug=debug))
 
     temp_pathes = []
     for title in taxonTitles:
@@ -384,7 +384,7 @@ def reorder_columns(df):
 
     return df[ordered_columns]
 
-def SaveRegionalStatus(status_df: pd.DataFrame, path: str, taxonTitle: str):
+def save_regional_status(status_df: pd.DataFrame, path: str, taxonTitle: str):
     
     now = datetime.now()
     QgsMessageLog.logMessage(f"\tPour {taxonTitle}, début de sauvegarde regionale ({now.hour:02}:{now.minute:02}:{now.second:02}.{now.microsecond // 1000:03})", "AutoUpdateTAXREF", level=Qgis.Info)
@@ -421,7 +421,7 @@ def SaveRegionalStatus(status_df: pd.DataFrame, path: str, taxonTitle: str):
 
     return
 
-def SaveNationalStatus(status_df: pd.DataFrame, path: str, taxonTitle: str, debug: int=0):
+def save_national_status(status_df: pd.DataFrame, path: str, taxonTitle: str, debug: int=0):
     
     now = datetime.now()
     QgsMessageLog.logMessage(f"\tPour {taxonTitle}, début de sauvegarde nationale ({now.hour:02}:{now.minute:02}:{now.second:02}.{now.microsecond // 1000:03})", "AutoUpdateTAXREF", level=Qgis.Info)
@@ -460,15 +460,15 @@ def SaveNationalStatus(status_df: pd.DataFrame, path: str, taxonTitle: str, debu
 
     return
 
-def SaveNewSources(path: str,
+def save_new_sources(path: str,
                    newVer: bool=False,
                    newSources: pd.DataFrame=pd.DataFrame(columns=["id", "fullCitation"]))->None:
 
     file_path_source = os.path.join(path, "Autre.gpkg")
     if newVer :
         current_year = date.today().year
-        sources = pd.concat([GetSourcesFromYear(current_year),
-                             GetSourcesFromYear(current_year-1)], ignore_index=True)[["id", "fullCitation"]]
+        sources = pd.concat([get_sources_from_year(current_year),
+                             get_sources_from_year(current_year-1)], ignore_index=True)[["id", "fullCitation"]]
 
     else :
         if os.path.isfile(file_path_source):

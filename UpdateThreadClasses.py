@@ -13,8 +13,8 @@ from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QProgressBar, QP
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QSemaphore
 from qgis.core import QgsMessageLog, Qgis
 
-from .UpdateTAXREF import GetDownloadURL, on_DownloadComplete
-from .UpdateStatus import run_download, SaveRegionalStatus, SaveNationalStatus, SaveNewSources
+from .UpdateTAXREF import get_download_url, on_DownloadComplete
+from .UpdateStatus import run_download, save_regional_status, save_national_status, save_new_sources
 
 class GetURLThread(QThread):
     finished = pyqtSignal(str) # Signal pour indiquer la fin du téléchargement
@@ -24,7 +24,7 @@ class GetURLThread(QThread):
         self.version = version
 
     def run(self):
-        url = GetDownloadURL(self.version)
+        url = get_download_url(self.version)
         self.finished.emit(url)
 
 class DownloadThread(QThread):
@@ -52,7 +52,7 @@ class DownloadThread(QThread):
 
         self.finished.emit(temp_zip_path)  # Émet le signal de fin
 
-class MajTaxrefThread(QThread):
+class SaveTaxrefThread(QThread):
     finished = pyqtSignal()
     
     def __init__(self, temp_zip_path, version, 
@@ -123,10 +123,10 @@ class GetStatusThread(QThread):
             self.global_progress += 100* 1/len(self.listStatusId)
             self.progress.emit(int(round(self.global_progress)))
         
-        self.Concat_and_Save()
+        self.concat_and_save()
         self.finished.emit()
 
-    def Concat_and_Save(self):
+    def concat_and_save(self):
 
         if self.debug > 0 :
                 QgsMessageLog.logMessage(f"Start of savings", "AutoUpdateTAXREF", level=Qgis.Info)  
@@ -148,7 +148,7 @@ class GetStatusThread(QThread):
                     lambda left, right: pd.merge(left, right, on=["Région", "CD_REF"], how="outer"), df_to_reduce)
 
                 # Sauvegarde les nouvelles colonnes
-                SaveRegionalStatus(statusUpdatedArray, self.path, title)
+                save_regional_status(statusUpdatedArray, self.path, title)
 
             if self.debug > 0 :
                 QgsMessageLog.logMessage(f"Start of saving {title} on national", "AutoUpdateTAXREF", level=Qgis.Info)
@@ -163,7 +163,7 @@ class GetStatusThread(QThread):
                     lambda left, right: pd.merge(left, right, on=["CD_REF"], how="outer"), df_to_reduce)
             
                 # Sauvegarde les nouvelles colonnes
-                SaveNationalStatus(statusUpdatedArray, self.path, title, debug=self.debug)
+                save_national_status(statusUpdatedArray, self.path, title, debug=self.debug)
 
             if self.debug > 0 :
                 QgsMessageLog.logMessage(f"End of saving on {title}", "AutoUpdateTAXREF", level=Qgis.Info)            
@@ -198,5 +198,5 @@ class SaveSourcesThread(QThread):
 
     def run(self):
         # Sauvegarde les nouvelles sources
-        SaveNewSources(self.path, self.newVer, self.newSources)
+        save_new_sources(self.path, self.newVer, self.newSources)
         self.finished.emit()
