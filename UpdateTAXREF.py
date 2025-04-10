@@ -17,7 +17,7 @@ from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from qgis.core import QgsMessageLog, Qgis
 
 # Générer l'URL de téléchargement pour une version donnée
-def GetDownloadURL(version):
+def get_download_url(version):
 
     if version < 1.0 :
         raise ValueError(f"La version minimum de TAXREF est la 1.0, version demandée : {version}")
@@ -33,7 +33,7 @@ def GetDownloadURL(version):
     return link_download
 
 # Télécharger le fichier ZIP à partir de l'URL donnée
-def DownloadZIP(link_download: str, save_path: str)-> None:
+def download_zip(link_download: str, save_path: str)-> None:
 
     try:
         print(f"Téléchargement depuis {link_download} ...")
@@ -49,7 +49,7 @@ def DownloadZIP(link_download: str, save_path: str)-> None:
     return
 
 # Filtrer les lignes du DataFrame selon plusieurs conditions
-def TriLignes(df:pd.DataFrame,
+def tri_lignes(df:pd.DataFrame,
               regne:str="Plantae",
               groupe1:str=["Autres"],
               groupe2:str=[""],
@@ -78,7 +78,7 @@ def TriLignes(df:pd.DataFrame,
     return df_filtre
 
 # Supprimer certaines colonnes inutiles du DataFrame
-def TriColonnes(df:pd.DataFrame, version:int)->pd.DataFrame:
+def tri_colonnes(df:pd.DataFrame, version:int)->pd.DataFrame:
     colonnes_a_supprimer = ['REGNE', 'PHYLUM', 'CLASSE', 'ORDRE', 'SOUS_FAMILLE', 'TRIBU', 'GROUP1_INPN', 'GROUP2_INPN', 'GROUP3_INPN', 'CD_TAXSUP', 'CD_SUP', 'CD_BA', 'URL_INPN', 'RANG', 'LB_NOM', 'LB_AUTEUR', 'NOM_COMPLET', 'NOM_COMPLET_HTML', 'NOM_VERN_ENG', 'HABITAT', 'FR', 'GF', 'MAR', 'GUA', 'SM', 'SB', 'SPM', 'MAY', 'EPA', 'REU', 'SA', 'TA', 'TAAF', 'PF', 'NC', 'WF', 'CLI', 'URL']  # Remplace par les noms des colonnes à supprimer
     df = df.drop(columns=colonnes_a_supprimer)
     df['VERSION'] = version
@@ -86,7 +86,7 @@ def TriColonnes(df:pd.DataFrame, version:int)->pd.DataFrame:
     return df
 
 # Supprimer les espèces sans nom vernaculaire et les noms vernaculaires doubles 
-def SupNomVern(df:pd.DataFrame, layer:str)->pd.DataFrame:
+def supprime_nom_vernaculaire(df:pd.DataFrame, layer:str)->pd.DataFrame:
     nom_couches = ('Amphibiens', 'Reptiles', 'Oiseaux', 'Mammifères')
     if layer in nom_couches:
         df.dropna(subset=["NOM_VERN"], inplace=True)
@@ -156,7 +156,7 @@ def on_DownloadComplete(temp_zip_path:str,
                     raise TypeError(f"TriLignes attend un DataFrame, mais a reçu {type(chunk)}")
 
                 # Filtrer les lignes et colonnes 
-                filtered_chunk = TriColonnes(TriLignes(chunk, regne=regne, groupe1=groupe1,
+                filtered_chunk = tri_colonnes(tri_lignes(chunk, regne=regne, groupe1=groupe1,
                                                 groupe2=groupe2, groupe3=groupe3, famille=famille,
                                                 synonyme=synonyme), version=version)
                 #print(filtered_chunk)
@@ -170,7 +170,7 @@ def on_DownloadComplete(temp_zip_path:str,
             df_filtre = pd.concat(filtered_frames, ignore_index=True)
 
             # On supprime les noms vernaculaires doubles ou vide dans certains taxons
-            df_filtre_nom_vern = SupNomVern(df=df_filtre, layer=title)
+            df_filtre_nom_vern = supprime_nom_vernaculaire(df=df_filtre, layer=title)
 
             # Convertir le pandas.DataFrame en geopandas.GeoDataFrame
             gdf = gpd.GeoDataFrame(df_filtre_nom_vern)
