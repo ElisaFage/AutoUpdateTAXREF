@@ -38,13 +38,12 @@ from .AutoUpdateTAXREF_dialog import AutoUpdateTAXREFDialog
 import os.path
 import pandas as pd
 
-from .GetVersions import Recup_my_version, Recup_current_version
-from .MessageBoxes import AskUpdate
+from .GetVersions import recup_my_version, recup_current_version
 
-from .UpdateSearchStatus import CheckUpdateStatus
-from .UpdateStatusDialog import UpdateStatusDialog, SaveXlsxDialog
+from .UpdateSearchStatus import check_update_status
+from .UpdateStatusDialog import UpdateStatusDialog, SaveXlsxDialog, ask_save_excel, ask_update
 
-from .ProgressDownload import DownloadWindow, DownloadWindowTest
+from .ProgressDownload import DownloadWindow
 
 from .UpdateInit import UpdateInitThread
 
@@ -224,10 +223,11 @@ class AutoUpdateTAXREF :
                 QgsMessageLog.logMessage(
                     f"Accepted : \nTAXREF : {new_version} \nStatus : {new_status}, {local_statusIds}",
                     "AutoUpdateTAXREF", level=Qgis.Info)
-            save_excel, folder = self.AskSaveExcel()
+            self.ask_save_excel = ask_save_excel
+            save_excel, folder = self.ask_save_excel()
             path = os.path.dirname(QgsProject.instance().fileName())
-            current_ver = Recup_current_version()
-            new_sources = CheckUpdateStatus(path)
+            current_ver = recup_current_version()
+            new_sources = check_update_status(path)
 
             self.download_window = DownloadWindow(path,
                                                   local_statusIds,
@@ -249,15 +249,15 @@ class AutoUpdateTAXREF :
         fauneBool = ("Faune" in project_name) or ("Field" in project_name)
         floreBool = ("Flore" in project_name) or ("Field" in project_name)
         if project_name.startswith(list_prefix):
-            self.UpdateSearch(project_path, faune=fauneBool, flore=floreBool)
+            self.update_search(project_path, faune=fauneBool, flore=floreBool)
 
-    def UpdateSearch(self, path:str, faune: bool=True, flore: bool=True):
+    def update_search(self, path:str, faune: bool=True, flore: bool=True):
 
         self.updateInitThread = UpdateInitThread(path, faune, flore, self.statusIds)
-        self.updateInitThread.finished.connect(self.on_UpdateSearch_finished)
+        self.updateInitThread.finished.connect(self.on_update_search_finished)
         self.updateInitThread.run()
 
-    def on_UpdateSearch_finished(self, do_update, path, local_statusIds,
+    def on_update_search_finished(self, do_update, path, local_statusIds,
                                  version, synonyme, new_version,
                                  new_status, new_sources,
                                  save_excel, folder, faune,
