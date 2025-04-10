@@ -7,10 +7,10 @@ from functools import reduce
 import pandas as pd
 import geopandas as gpd
 
-from PyQt5.QtCore import Qt, QThread, pyqtSignal
+from PyQt5.QtCore import QThread, pyqtSignal
 from qgis.core import QgsMessageLog, Qgis
 
-from .UpdateTAXREF import get_download_url, on_DownloadComplete
+from .UpdateTAXREF import get_download_url, tri_taxon_taxref
 from .UpdateStatus import run_download, save_regional_status, save_national_status, save_new_sources
 
 class GetURLThread(QThread):
@@ -174,7 +174,7 @@ class SaveTaxrefThread(QThread):
         The `finished` signal is emitted once the saving process is complete.
         """
         # Process the downloaded data and save it to the specified path
-        on_DownloadComplete(self.temp_zip_path, self.version,
+        tri_taxon_taxref(self.temp_zip_path, self.version,
                             self.taxonTitle, self.taxon_regne,
                             self.taxon_groupe_1, self.taxon_groupe_2,
                             self.taxon_groupe_3, self.taxon_famille,

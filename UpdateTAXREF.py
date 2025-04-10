@@ -197,7 +197,7 @@ def supprime_nom_vernaculaire(df:pd.DataFrame, layer:str)->pd.DataFrame:
         return df
 
 
-def on_DownloadComplete(temp_zip_path:str,
+def tri_taxon_taxref(temp_zip_path:str,
                         version:int,
                         titles:list, regnes:list,
                         groupes1:list, groupes2:list,
