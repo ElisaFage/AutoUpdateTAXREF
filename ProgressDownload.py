@@ -9,7 +9,7 @@ from qgis.core import QgsMessageLog, Qgis
 from .UpdateThreadClasses import (
     GetURLThread,
     DownloadThread,
-    MajTaxrefThread,
+    SaveTaxrefThread,
     GetStatusThread,
     SaveSourcesThread,
 )
@@ -270,7 +270,7 @@ class DownloadWindow(QWidget):
         """
         Démarre le thread de sauvegarde des données TAXREF.
         """
-        self.save_taxref_thread = MajTaxrefThread(
+        self.save_taxref_thread = SaveTaxrefThread(
             self.file_path,
             self.version,
             self.taxon_titles,
