@@ -755,7 +755,8 @@ def save_regional_status(status_df: pd.DataFrame, path: str, taxon_title: str, d
     if layer_name in available_layers["name"].values:
         old_file = pd.DataFrame(gpd.read_file(file_save_path, layer=layer_name))
             
-        colonnes_sans_cd_ref = [col for col in status_df.columns if ((col not in ['CD_REF', "Région"]) and (col in old_file.columns))]
+        col_to_check = ['CD_REF', "Région"]
+        colonnes_sans_cd_ref = [col for col in status_df.columns if ((col not in col_to_check) and (col in old_file.columns))]
         old_file_light = old_file.drop(columns=colonnes_sans_cd_ref)
 
         # Merge les nouvelles colonne sur la couche "Status {taxonTitle}"
@@ -783,7 +784,8 @@ def save_national_status(status_df: pd.DataFrame, path: str, taxon_title: str, d
     file_save_path = get_file_save_path(path, taxon_title)
     old_file = pd.DataFrame(gpd.read_file(file_save_path, layer=f"Liste {taxon_title}"))
 
-    colonnes_sans_cd_ref = [col for col in status_df.columns if ((col != 'CD_REF') and (col in old_file.columns))]
+    col_to_check = ["CD_REF"]
+    colonnes_sans_cd_ref = [col for col in status_df.columns if ((col not in col_to_check) and (col in old_file.columns))]
 
     old_file['CD_REF'] = old_file['CD_REF'].astype(str) 
     status_df['CD_REF'] = status_df['CD_REF'].astype(str)
@@ -804,6 +806,70 @@ def save_national_status(status_df: pd.DataFrame, path: str, taxon_title: str, d
 
     gdf = gpd.GeoDataFrame(reresult)
     gdf.to_file(file_save_path, layer=f"Liste {taxon_title}", driver="GPKG")
+
+    return
+
+def save_global_status(status_df: pd.DataFrame,
+                path: str,
+                taxon_title: str,
+                save_type: str,
+                debug:int=0)->None:
+
+    print_debug_info(debug, -1, f"\tPour {taxon_title}, début de sauvegarde {save_type}")
+
+    # Colonnes pour le merge
+    col_to_check = ["CD_REF"]
+    national_value = "national"
+    regional_value = "regional"
+    bird_col = []
+
+    # Enregistrer dans un fichier GeoPackage
+    file_save_path = get_file_save_path(path, taxon_title)
+    available_layers = gpd.list_layers(file_save_path)
+    if save_type == regional_value:
+        layer_name = f"Statuts {taxon_title}"
+        col_to_check.append("Région")
+
+    elif save_type == national_value:
+        layer_name = f"Liste {taxon_title}"
+        bird_col = ["LRN"] if taxon_title == "Oiseaux" else []
+    else:
+        raise ValueError(f"save_type should be either \"{national_value}\" or \"{regional_value}\" but is : {save_type}")
+    
+    # Traitement pour la fusion des tableaux
+    if layer_name in available_layers["name"].values:
+        old_file = pd.DataFrame(gpd.read_file(file_save_path, layer=layer_name))
+
+        old_file['CD_REF'] = old_file['CD_REF'].astype(str) 
+        status_df['CD_REF'] = status_df['CD_REF'].astype(str)
+ 
+        colonnes_sans_cd_ref = [col for col in status_df.columns if ((col not in col_to_check) and (col in old_file.columns))]
+        
+        print_debug_info(debug, 2, f"Pour {taxon_title} : les colonnes de status_df sont {status_df.columns}")
+        old_file_light = old_file.drop(columns=colonnes_sans_cd_ref+bird_col)
+
+        # Conserver uniquement les lignes où au moins une des colonnes non exclues n'est pas vide
+        subset_col_dropna = [col for col in status_merged.columns if col not in col_to_check]
+        
+        # Merge les nouvelles colonne sur la couche "Status {taxonTitle}"
+        if save_type == regional_value:
+            status_merged = pd.merge(old_file_light, status_df, on=col_to_check, how='outer').dropna(axis=0, how="all", subset=subset_col_dropna)
+        else:
+            status_merged = pd.merge(old_file_light, status_df, on=col_to_check, how='outer')
+
+        status_na_dropped = status_merged.dropna(axis=1, how="all")
+
+    else:
+        status_na_dropped = status_df.dropna(axis=1, how="all")
+
+    print_debug_info(debug, 2, f"Pour {taxon_title} : les colonnes de result sont {status_na_dropped.columns}")
+
+    status_to_save = reorder_columns(status_na_dropped).drop_duplicates()
+
+    print_debug_info(debug, 2, f"Pour {taxon_title} : les colonnes de reresult sont {status_to_save.columns}")
+        
+    gdf = gpd.GeoDataFrame(status_to_save)
+    gdf.to_file(file_save_path, layer=layer_name, driver="GPKG")
 
     return
 
