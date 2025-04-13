@@ -4,6 +4,7 @@ import re
 
 import os
 import requests
+from typing import List, Tuple, Dict
 
 from datetime import date
 
@@ -12,7 +13,7 @@ from .UpdateSearchStatus import get_sources_from_year
 from .utils import print_debug_info, get_file_save_path
 
 # Supprime les lignes non nécessaires dans le pandas dataframe
-def filter_by_cd_ref(df_concat: pd.DataFrame, taxonTitles: list, path: str) -> pd.DataFrame:
+def filter_by_cd_ref(df_concat: pd.DataFrame, taxon_titles: List[str], path: str) -> pd.DataFrame:
     """
     Filtre les données en fonction des références taxonomiques et exclut les enregistrements hors DOM-TOM.
 
@@ -33,7 +34,7 @@ def filter_by_cd_ref(df_concat: pd.DataFrame, taxonTitles: list, path: str) -> p
     # Charger les fichiers GPKG pour chaque titre une seule fois et les stocker dans un dictionnaire
     
     dict_df_out = {}
-    for title in taxonTitles:
+    for title in taxon_titles:
         # Définir le chemin du fichier GPKG en fonction du titre du taxon
         if title == "Flore":
             file_path = os.path.join(path, f"{title}.gpkg")
@@ -52,7 +53,7 @@ def filter_by_cd_ref(df_concat: pd.DataFrame, taxonTitles: list, path: str) -> p
     return dict_df_out
 
 # Extrait un status_code en fonction de 4 conditions
-def extract_status_code(row, statusId: str, currentTaxon: str, oiseauxKeywords: list):
+def extract_status_code(row, statusId: str, currentTaxon: str, oiseauxKeywords: List[str]):
     """
     Extrait un code de statut basé sur plusieurs conditions et informations provenant de la ligne de données.
 
@@ -107,7 +108,7 @@ def extract_status_code(row, statusId: str, currentTaxon: str, oiseauxKeywords: 
 def reorganize_columns_and_codes(status_data_in: pd.DataFrame,
                                  status_id: str,
                                  taxon_title: str,
-                                 oiseaux_keywords: list)->pd.DataFrame:
+                                 oiseaux_keywords: List[str])->pd.DataFrame:
     
     """
     Réorganise et nettoie les colonnes d’un DataFrame contenant des statuts TAXREF,
@@ -241,7 +242,7 @@ def do_save_excel(save_excel: bool,
 def generate_status_by_level(df: pd.DataFrame, level_name: str,
                              region_filter_func,
                              lambdafunc_dict: dict,
-                             regions: dict, statusId: str)->list:
+                             regions: dict, statusId: str)->List[pd.DataFrame]:
     """
     Génère un statut agrégé par niveau (Région ou autre niveau administratifs) en fonction de `statusId`.
 
@@ -302,7 +303,7 @@ def generate_status_by_level(df: pd.DataFrame, level_name: str,
     return result
 
 # Fonction pour créer les fonctions d'aggrégation
-def definir_agg_function(status_id: str, status_data: pd.DataFrame)->tuple:
+def definir_agg_function(status_id: str, status_data: pd.DataFrame)->Tuple[pd.DataFrame, Dict[str, str]] :
     """
     Définit un dictionnaire de fonctions d'agrégation pour concaténer les colonnes 
     liées à un statut donné, en les séparant par un point-virgule.
@@ -495,7 +496,7 @@ def make_status_array(status_id: str,
     return status_array_out
 
 def download_status(status_id: str,
-                 taxon_titles: list,
+                 taxon_titles: List[str],
                  path: str,
                  save_excel: bool,
                  folder_excel: str,
@@ -578,7 +579,7 @@ def download_status(status_id: str,
 
     return dict_make_array_out
 
-def save_temp_file_status(dict_make_array_in: dict,
+def save_temp_file_status(dict_make_array_in: Dict[str, pd.DataFrame],
                           status_id: str,
                           taxon_titles: str,
                           path: str,
@@ -636,7 +637,7 @@ def save_temp_file_status(dict_make_array_in: dict,
     return temp_pathes
 
 def run_download_status(status_id: str,
-                        taxon_titles: list,
+                        taxon_titles: List[str],
                         path: str,
                         save_excel: bool,
                         folder_excel: str,
@@ -686,7 +687,7 @@ def run_download_status(status_id: str,
 
     return temp_pathes
 
-def reorder_columns(df)->pd.DataFrame:
+def reorder_columns(df: pd.DataFrame)->pd.DataFrame:
     """
     Réorganise les colonnes d'un DataFrame en fonction de certains critères de priorisation.
     Les colonnes sont regroupées par statut (status_id) et triées de manière à placer :
@@ -910,26 +911,3 @@ def save_new_sources(path: str,
     sources_gdf.to_file(file_path_source, layer="Source")
 
     return
-
-
-"""departements = ["Ain", "Allier", "Ardèche", "Cantal", "Drôme", "Isère",
-                "Loire", "Haute-Loire", "Puy-de-Dôme", "Rhône", "Savoie",
-                "Haute-Savoie", "Côte-d'Or", "Doubs", "Jura", "Nièvre",
-                "Haute-Saône", "Saône-et-Loire", "Yonne", "Côtes-d'Armor",
-                "Finistère", "Ille-et-Vilaine", "Morbian", "Cher",
-                "Eure-et-Loir", "Indre", "Indre-et-Loire", "Loir-et-Cher",
-                "Loiret", "Corse-du-Sud", "Haute-Corse", "Ardennes", "Aube",
-                "Marne", "Haute-Marne", "Meurthe-et-Moselle", "Meuse",
-                "Bas-Rhin", "Haut-Rhin", "Vosges", "Aisne", "Nord", "Oise",
-                "Pas-de-Calais", "Somme", "Paris", "Seine-et-Marne",
-                "Yvelines", "Essonne", "Hauts-de-Seine", "Seine-Saint-Denis",
-                "Val-de-Marne", "Val-d'Oise", "Calvados", "Eure", "Manche",
-                "Orne", "Seine-Maritime", "Charente", "Charente-Maritime",
-                "Corrèze", "Creuse", "Dordogne", "Gironde", "Landes",
-                "Lot-et-Garonne", "Pyrénées-Atlantique", "Deux-Sèvre",
-                "Vienne", "Haute-Vienne", "Ariège", "Aude", "Aveyron",
-                "Gard", "Haute-Garonne", "Gers", "Hérault", "Lot", "Lozère",
-                "Hautes-Pyrénées", "Pyrénées-Orientales", "Tarn",
-                "Tarn-et-Garonne", "Loire-Atlantique", "Maine-et-Loire",
-                "Mayenne", "Sarthe", "Vendée", "Alpes-de-Haute-Provence",
-                "Hautes-Alpes", "Alpes-Maritimes", "Bouches-du-Rhône", "Var", "Vaucluse"]"""

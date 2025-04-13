@@ -4,12 +4,13 @@ import geopandas as gpd
 import os
 from urllib.request import urlopen, urlretrieve
 from urllib.error import URLError, HTTPError
-from datetime import datetime
+from typing import List
 
 import json
 import zipfile
 
-from utils import print_debug_info, get_file_save_path, TaxonGroupe
+from .utils import print_debug_info, get_file_save_path
+from .taxongroupe import TaxonGroupe
 
 # Générer l'URL de téléchargement pour une version donnée
 def get_download_url(version):
@@ -66,62 +67,6 @@ def download_zip(link_download: str, save_path: str)-> None:
         print(f"Une erreur est survenue: {str(e)}")
 
     return
-
-# Filtrer les lignes du DataFrame selon plusieurs conditions
-def tri_lignes(df:pd.DataFrame,
-              taxon: TaxonGroupe,
-              synonyme:bool=False)->pd.DataFrame:
-    
-    """
-    Filtre les lignes d'un DataFrame en fonction des critères spécifiques
-    relatifs à un groupe taxonomique, à la présence d'un nom français et à la validité du taxon.
-
-    Args:
-        df (pd.DataFrame): Le DataFrame contenant les données à filtrer.
-        regne (str): Le règne biologique à filtrer. Par défaut, "Plantae".
-        groupe1 (str): Liste des groupes de premier niveau à filtrer. Par défaut, ["Autres"].
-        groupe2 (str): Liste des groupes de deuxième niveau à filtrer. Par défaut, [""].
-        groupe3 (str): Liste des groupes de troisième niveau à filtrer. Par défaut, [""].
-        famille (str): Liste des familles à filtrer. Par défaut, [""].
-        synonyme (bool): Indique si les synonymes doivent être inclus. Par défaut, False.
-
-    Returns:
-        pd.DataFrame: Un DataFrame filtré selon les critères spécifiés.
-    """
-
-    # Base : conditions toujours présentes
-    conditions = [
-        df['REGNE'] == taxon.regne,
-        df['GROUP1_INPN'].isin(taxon.groupe1),
-        df['FR'].isin(['P', 'E', 'S', 'C', 'I', 'J', 'M', 'B', 'D', 'G'])
-    ]
-
-    # Ordre, si précisé
-    if taxon.ordre != [""]:
-        conditions.append(df['ORDRE'].isin(taxon.ordre))
-
-    # Groupe2, si précisé
-    if taxon.groupe2 != [""]:
-        conditions.append(df['GROUP2_INPN'].isin(taxon.groupe2))
-
-    # Groupe3, si précisé
-    if taxon.groupe3 != [""]:
-        conditions.append(df['GROUP3_INPN'].isin(taxon.groupe3))
-
-    # Famille, si précisé
-    if taxon.famille != [""]:
-        conditions.append(df['FAMILLE'].isin(taxon.famille))
-
-    # Validité taxonomique
-    if not synonyme:
-        conditions.append(df['CD_NOM'] == df['CD_REF'])
-
-    # Application des filtres combinés
-    final_condition = pd.concat(conditions, axis=1).all(axis=1)
-
-    df_filtre = df[final_condition]
-    
-    return df_filtre
 
 # Supprimer certaines colonnes inutiles du DataFrame
 def tri_colonnes(df:pd.DataFrame, version:int)->pd.DataFrame:
@@ -192,7 +137,7 @@ def supprime_nom_vernaculaire(df:pd.DataFrame, layer:str)->pd.DataFrame:
 
 def tri_taxon_taxref(temp_zip_path:str,
                         version:int,
-                        taxons: list,
+                        taxons: List[TaxonGroupe],
                         save_path:str,
                         synonyme:bool=False,
                         debug: int=0):

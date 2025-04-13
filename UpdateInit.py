@@ -3,6 +3,7 @@ from PyQt5.QtWidgets import QDialog, QFileDialog
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 
 import pandas as pd
+from typing import List
 
 from .GetVersions import recup_my_version, recup_current_version
 
@@ -22,7 +23,8 @@ class UpdateInitThread(QThread):
     finished = pyqtSignal(
         bool,         # do_update
         str,          # path
-        list,         # local_status_ids
+        List[str],    # local_status_ids
+        List[str],    # taxon_titles
         int,          # version
         bool,         # synonyme
         bool,         # new_version
@@ -30,27 +32,26 @@ class UpdateInitThread(QThread):
         pd.DataFrame, # new_sources
         bool,         # save_excel
         str,          # folder
-        bool,         # faune
-        bool,         # flore
         int           # debug
     )
 
-    def __init__(self, path, faune, flore, status_ids):
+    def __init__(self,
+                 path: str,
+                 taxon_titles: List[str],
+                 status_ids: List[str]):
         """
         Initialise l'instance de la classe UpdateInitThread.
 
         Args:
             path (str): Chemin d'accès au fichier ou dossier à vérifier.
-            faune (bool): Indique si la mise à jour concerne la faune.
-            flore (bool): Indique si la mise à jour concerne la flore.
-            status_ids (list): Liste des identifiants des statuts locaux.
+            taxon_titles (List[str]): Liste des taxon à mettre à jour
+            status_ids (List[str]): Liste des identifiants des statuts locaux.
         """
         super().__init__()
         self.path = path
         self.debug = 1
 
-        self.faune = faune
-        self.flore = flore
+        self.taxon_titles = taxon_titles
 
         self.status_ids = status_ids
         self.local_status_ids = status_ids
@@ -119,6 +120,7 @@ class UpdateInitThread(QThread):
             self.do_update,
             self.path,
             self.local_status_ids,
+            self.taxon_titles,
             self.current_version,
             False,
             self.new_version,
@@ -126,8 +128,6 @@ class UpdateInitThread(QThread):
             self.new_sources,
             self.save_excel,
             self.folder,
-            self.faune,
-            self.flore,
             self.debug,
         )
     

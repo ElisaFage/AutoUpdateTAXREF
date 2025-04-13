@@ -2,6 +2,7 @@ import os
 import requests
 import tempfile
 from functools import reduce
+from typing import List
 
 import pandas as pd
 import geopandas as gpd
@@ -11,6 +12,7 @@ from PyQt5.QtCore import QThread, pyqtSignal
 from .UpdateTAXREF import get_download_url, tri_taxon_taxref
 from .UpdateStatus import run_download_status, save_global_status, save_new_sources
 from .utils import print_debug_info
+from .taxongroupe import TaxonGroupe
 
 class GetURLThread(QThread):
     """
@@ -23,7 +25,7 @@ class GetURLThread(QThread):
     # Signal pour indiquer la fin du processus de récupération de l'URL
     finished = pyqtSignal(str) # Signal pour indiquer la fin du téléchargement
 
-    def __init__(self, version):
+    def __init__(self, version: int):
         """
         Initialise le thread pour récupérer l'URL de téléchargement pour la version spécifiée.
 
@@ -62,7 +64,7 @@ class DownloadThread(QThread):
     # Signal pour indiquer la fin du téléchargement
     finished = pyqtSignal(str)  
 
-    def __init__(self, url):
+    def __init__(self, url: str):
         """
         Initialise le thread de téléchargement avec l'URL du fichier à télécharger.
 
@@ -124,7 +126,7 @@ class SaveTaxrefThread(QThread):
     finished = pyqtSignal()
     
     def __init__(self, temp_zip_path, version, 
-                 taxons: list,
+                 taxons: List[TaxonGroupe],
                  save_path, synonyme:bool=False):
         """
         Initialise le SaveTaxrefThread avec les paramètres donnés.
@@ -183,13 +185,18 @@ class GetStatusThread(QThread):
     progress = pyqtSignal(int)
     finished = pyqtSignal()
 
-    def __init__(self, path: str, taxonTitles: list, status_ids: list, save_excel, folder_excel, debug: int=0):
+    def __init__(self, path: str,
+                 taxon_titles: List[str],
+                 status_ids: List[str],
+                 save_excel: bool,
+                 folder_excel: str,
+                 debug: int=0):
         """
         Initialise le thread pour récupérer les statuts et effectuer le téléchargement et la sauvegarde.
 
         Args:
             path (str): Le chemin où les fichiers doivent être sauvegardés.
-            taxonTitles (list): Liste des titres des taxons à traiter.
+            taxon_titles (list): Liste des titres des taxons à traiter.
             status_ids (list): Liste des identifiants de statuts à récupérer.
             save_excel (bool): Si vrai, les résultats sont sauvegardés dans un fichier Excel.
             folder_excel (str): Le dossier où enregistrer le fichier Excel.
@@ -201,7 +208,7 @@ class GetStatusThread(QThread):
         self.list_status_id = status_ids
         self.save_excel = save_excel
         self.folder_excel = folder_excel
-        self.taxonTitles = taxonTitles
+        self.taxonTitles = taxon_titles
         
         self.debug = debug
 
@@ -352,7 +359,10 @@ class SaveSourcesThread(QThread):
 
     finished = pyqtSignal()
 
-    def __init__(self, path, new_version, new_sources):
+    def __init__(self,
+                 path: str,
+                 new_version: int,
+                 new_sources: pd.DataFrame):
         """
         Initialise un thread pour la sauvegarde des nouvelles sources.
 

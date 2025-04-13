@@ -36,7 +36,8 @@ from .resources import *
 # Import du code pour la boÃ®te de dialogue du plugin
 from .AutoUpdateTAXREF_dialog import AutoUpdateTAXREFDialog
 import os.path
-import pandas as pd
+import geopandas as gpd
+from typing import List
 
 from .GetVersions import recup_current_version
 
@@ -203,9 +204,12 @@ class AutoUpdateTAXREF :
 
         # Create the dialog with elements (after translation) and keep reference
         # Only create GUI ONCE in callback, so that it will only load when the plugin is started
+        project_path = os.path.dirname(QgsProject.instance().fileName())
+        data_taxon_titles = self.get_taxon_title_from_data(project_path)
+
         if self.first_start == True:
             self.first_start = False
-            self.dlg = AutoUpdateTAXREFDialog(status_names=self.status_ids)
+            self.dlg = AutoUpdateTAXREFDialog(taxon_titles=data_taxon_titles, status_names=self.status_ids)
 
         # show the dialog
         self.dlg.reset_dialog()
@@ -218,6 +222,7 @@ class AutoUpdateTAXREF :
 
             new_version = True if self.dlg.radio_taxref_all.isChecked() else False
             new_status = True if self.dlg.radio_status_only.isChecked() else False
+            local_taxons_titles = list(self.dlg.selected_taxons) 
             local_status_ids = list(self.dlg.selected_statuses)
             if debug > 0 :
                 QgsMessageLog.logMessage(
@@ -231,6 +236,7 @@ class AutoUpdateTAXREF :
 
             self.download_window = DownloadWindow(path,
                                                   local_status_ids,
+                                                  local_taxons_titles,
                                                   version=current_ver,
                                                   synonyme=False,
                                                   new_version=new_version,
@@ -241,27 +247,46 @@ class AutoUpdateTAXREF :
                                                   debug=debug)
             self.download_window.show()
 
-
     def on_project_loaded(self):
+
         project_path = os.path.dirname(QgsProject.instance().fileName())
-        project_name = os.path.basename(QgsProject.instance().fileName())
-        list_prefix = ("QField", "QFlore", "QFaune")
-        fauneBool = ("Faune" in project_name) or ("Field" in project_name)
-        floreBool = ("Flore" in project_name) or ("Field" in project_name)
-        if project_name.startswith(list_prefix):
-            self.update_search(project_path, faune=fauneBool, flore=floreBool)
+        taxon_titles = self.get_taxon_title_from_data(project_path)
 
-    def update_search(self, path:str, faune: bool=True, flore: bool=True):
+        if taxon_titles != None :
+            self.update_search(project_path, taxon_titles)
 
-        self.updateInitThread = UpdateInitThread(path, faune, flore, self.status_ids)
+    def get_taxon_title_from_data(self,
+                                  path: str):
+
+        data_path = os.path.join(path, "Données.gpkg")
+
+        if os.path.isfile(data_path) :
+            available_layers = gpd.list_layers(data_path)
+            if available_layers.shape[0] != 0 :
+                taxon_titles = available_layers["Name"].values
+                return taxon_titles
+        
+        return None
+
+    def update_search(self, path:str, taxon_titles: List[str]):
+
+        self.updateInitThread = UpdateInitThread(path, taxon_titles=taxon_titles, status_ids=self.status_ids)
         self.updateInitThread.finished.connect(self.on_update_search_finished)
         self.updateInitThread.run()
 
-    def on_update_search_finished(self, do_update, path, local_status_ids,
-                                 version, synonyme, new_version,
-                                 new_status, new_sources,
-                                 save_excel, folder, faune,
-                                 flore, debug):
+    def on_update_search_finished(self,
+                                  do_update,
+                                  path,
+                                  local_status_ids,
+                                  taxon_titles,
+                                  version,
+                                  synonyme,
+                                  new_version,
+                                  new_status,
+                                  new_sources,
+                                  save_excel,
+                                  folder,
+                                  debug):
         
         if do_update :
             if debug > 1 :
@@ -270,6 +295,7 @@ class AutoUpdateTAXREF :
 
             self.download_window = DownloadWindow(path,
                                                   local_status_ids,
+                                                  taxon_titles = taxon_titles,
                                                   version = version,
                                                   synonyme = synonyme,
                                                   new_version = new_version,
@@ -277,8 +303,6 @@ class AutoUpdateTAXREF :
                                                   new_sources = new_sources,
                                                   save_excel = save_excel,
                                                   folder = folder,
-                                                  faune = faune,
-                                                  flore = flore,
                                                   debug = debug)
             self.download_window.show()
     

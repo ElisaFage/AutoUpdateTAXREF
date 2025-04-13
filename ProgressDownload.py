@@ -1,4 +1,5 @@
 import pandas as pd
+from typing import List
 
 from PyQt5.QtWidgets import (
     QApplication,  QWidget, QVBoxLayout,
@@ -13,8 +14,9 @@ from .UpdateThreadClasses import (
     SaveSourcesThread,
 )
 
-from .utils import (print_debug_info,
-                    TAXONS)
+from .utils import print_debug_info
+from .taxongroupe import TAXONS
+        
 
 class DownloadWindow(QWidget):
     """
@@ -35,15 +37,9 @@ class DownloadWindow(QWidget):
 
     # Attributs de classe définissant les taxons
     version = None
-    """taxon_titles = TAXON_TITLES
-    taxon_regnes = TAXON_REGNES
-    taxon_ordres = TAXON_ORDRES
-    taxon_groupes_1 = TAXON_GROUPES_1
-    taxon_groupes_2 = TAXON_GROUPES_2
-    taxon_groupes_3 = TAXON_GROUPES_3
-    taxon_famille = TAXON_FAMILLE"""
 
-    def __init__(self, path: str, status_ids: list,
+    def __init__(self, path: str, status_ids: List[str],
+                 taxon_titles: List[str],
                  version: int = None,
                  synonyme: bool = False,
                  new_version: bool = False,
@@ -51,24 +47,22 @@ class DownloadWindow(QWidget):
                  new_sources: pd.DataFrame = pd.DataFrame(columns=["id", "fullCitation"]),
                  save_excel: bool = False,
                  folder: str = "",
-                 faune: bool = True,
-                 flore: bool = True,
-                 fungi: bool = True,
                  debug: int = 0):
         """
         Initialise la fenêtre de téléchargement de TAXREF.
 
-        :param path: Chemin de sauvegarde.
-        :param status_ids: Liste des identifiants de statut.
-        :param version: Version du fichier TAXREF.
-        :param synonyme: Prise en compte des synonymes.
-        :param new_version: Indique si une nouvelle version doit être téléchargée.
-        :param new_status: Indique si les statuts doivent être mis à jour.
-        :param new_sources: DataFrame contenant les nouvelles sources.
-        :param save_excel: Sauvegarde dans un fichier Excel.
-        :param folder: Dossier de sauvegarde du fichier Excel.
-        :param faune: Téléchargement des données de faune si True.
-        :param flore: Téléchargement des données de flore si True.
+        :param path (str): Chemin de sauvegarde.
+        :param status_ids (list): Liste des identifiants de statut.
+        :param version (int): Version du fichier TAXREF.
+        :param synonyme (bool): Prise en compte des synonymes.
+        :param new_version (bool): Indique si une nouvelle version doit être téléchargée.
+        :param new_status (bool): Indique si les statuts doivent être mis à jour.
+        :param new_sources (pd.DataFrame): DataFrame contenant les nouvelles sources.
+        :param save_excel (bool): Sauvegarde dans un fichier Excel.
+        :param folder (str): Dossier de sauvegarde du fichier Excel.
+        :param faune (bool): Téléchargement des données de faune si True.
+        :param flore (bool): Téléchargement des données de flore si True.
+        :param fungi (bool): Téléchargement des données de fungi si True.
         :param debug: Niveau de débogage.
         """
         super().__init__()
@@ -95,17 +89,9 @@ class DownloadWindow(QWidget):
         self.current_step = 0
         self.total_steps = 6 if new_version else 3 if new_status else 1
 
-        # Filtrer les taxons selon les paramètres 'faune', 'flore' et 'fungi' 
-        self.taxons = []
-        if faune :
-            self.taxons.append(self._filter_taxa('faune'))
-        if flore : 
-            self.taxons.append(self._filter_taxa("flore"))
-        if fungi :
-            self.taxons.append(self._filter_taxa("fungi"))
-        
-        # Récupère les titre des différents taxons
-        self.taxon_titles = [taxon.title for taxon in self.taxons]
+        # Filtrer les taxons selon les taxons présents dans taxon_titles
+        self.taxon_titles = taxon_titles
+        self.taxons = [taxon for taxon in TAXONS if taxon.title in taxon_titles]
 
         self._setup_ui()
 
@@ -118,13 +104,15 @@ class DownloadWindow(QWidget):
             self._start_save_sources()
 
     def _filter_taxa(self, regne: str):
-        """Filtrer les taxons par règne."""
+        """Filtrer les taxons par règne.
+        
+        :param regne (str): Règne à garder pour le téléchargement
+
+        return
+            taxons (list): Liste d'objet TaxonGroupe
+        """
         #Ne garde que les taxons dont le regne est le même que celui du paramètre 'regne'
         taxons = [taxon for taxon in TAXONS if getattr(taxon, f"is{regne}")]
-        """indices = [i for i, r in enumerate(self.taxon_regnes) if r == regne]
-        for attr in ['taxon_titles', 'taxon_regnes', 'taxon_ordres', 'taxon_groupes_1',
-                     'taxon_groupes_2', 'taxon_groupes_3', 'taxon_famille']:
-            setattr(self, attr, [v for i, v in enumerate(getattr(self, attr)) if i not in indices])"""
         
         return taxons
 
@@ -162,7 +150,7 @@ class DownloadWindow(QWidget):
         self.update_global_progress_label("Annulation en cours...")
         self.close()
 
-    def update_global_progress_label(self, text):
+    def update_global_progress_label(self, text: str):
         """
         Met à jour le texte du label principal.
 
@@ -171,7 +159,7 @@ class DownloadWindow(QWidget):
         if hasattr(self, 'global_progress_label'):
             self.global_progress_label.setText(text)
 
-    def update_step_progress_label(self, text):
+    def update_step_progress_label(self, text: str):
         """
         Met à jour le texte du label secondaire.
 
@@ -192,7 +180,7 @@ class DownloadWindow(QWidget):
         )
         self.get_url_thread.start()
 
-    def _on_url_found(self, url):
+    def _on_url_found(self, url:str):
         """
         Callback appelé lorsque l'URL de téléchargement est récupérée.
 
@@ -216,7 +204,7 @@ class DownloadWindow(QWidget):
         self.update_global_progress_label("Téléchargement de TAXREF en cours...")
         self.download_thread.start()
 
-    def _on_download_complete(self, file_path):
+    def _on_download_complete(self, file_path: str):
         """
         Callback appelé lorsque le téléchargement est terminé.
 
