@@ -23,7 +23,7 @@
 """
 #from .UpdateSearch import UpdateSearch
 
-from qgis.core import QgsMessageLog, Qgis, QgsProject, QgsFeatureRequest, QgsField, QgsFeature, QgsGeometry, QgsVectorLayer
+from qgis.core import QgsMessageLog, Qgis, QgsProject
 from PyQt5.QtWidgets import QDialog, QFileDialog
 from PyQt5.QtCore import QVariant, QObject
 
@@ -38,10 +38,10 @@ from .AutoUpdateTAXREF_dialog import AutoUpdateTAXREFDialog
 import os.path
 import pandas as pd
 
-from .GetVersions import recup_my_version, recup_current_version
+from .GetVersions import recup_current_version
 
 from .UpdateSearchStatus import check_update_status
-from .UpdateStatusDialog import UpdateStatusDialog, SaveXlsxDialog, ask_save_excel, ask_update
+from .UpdateStatusDialog import ask_save_excel
 
 from .ProgressDownload import DownloadWindow
 
@@ -51,7 +51,7 @@ from .UpdateInit import UpdateInitThread
 class AutoUpdateTAXREF :
     """QGIS Plugin Implementation."""
 
-    statusIds = ["DH", "DO", "PN", "PR", "PD", "LRN", "LRR", "PNA", "PAPNAT", "ZDET", "REGLLUTTE"]
+    status_ids = ["DH", "DO", "PN", "PR", "PD", "LRN", "LRR", "PNA", "PAPNAT", "ZDET", "REGLLUTTE"]
 
     def __init__(self, iface):
         """Constructor.
@@ -205,7 +205,7 @@ class AutoUpdateTAXREF :
         # Only create GUI ONCE in callback, so that it will only load when the plugin is started
         if self.first_start == True:
             self.first_start = False
-            self.dlg = AutoUpdateTAXREFDialog(status_names=self.statusIds)
+            self.dlg = AutoUpdateTAXREFDialog(status_names=self.status_ids)
 
         # show the dialog
         self.dlg.reset_dialog()
@@ -218,10 +218,10 @@ class AutoUpdateTAXREF :
 
             new_version = True if self.dlg.radio_taxref_all.isChecked() else False
             new_status = True if self.dlg.radio_status_only.isChecked() else False
-            local_statusIds = list(self.dlg.selected_statuses)
+            local_status_ids = list(self.dlg.selected_statuses)
             if debug > 0 :
                 QgsMessageLog.logMessage(
-                    f"Accepted : \nTAXREF : {new_version} \nStatus : {new_status}, {local_statusIds}",
+                    f"Accepted : \nTAXREF : {new_version} \nStatus : {new_status}, {local_status_ids}",
                     "AutoUpdateTAXREF", level=Qgis.Info)
             self.ask_save_excel = ask_save_excel
             save_excel, folder = self.ask_save_excel()
@@ -230,7 +230,7 @@ class AutoUpdateTAXREF :
             new_sources = check_update_status(path)
 
             self.download_window = DownloadWindow(path,
-                                                  local_statusIds,
+                                                  local_status_ids,
                                                   version=current_ver,
                                                   synonyme=False,
                                                   new_version=new_version,
@@ -253,11 +253,11 @@ class AutoUpdateTAXREF :
 
     def update_search(self, path:str, faune: bool=True, flore: bool=True):
 
-        self.updateInitThread = UpdateInitThread(path, faune, flore, self.statusIds)
+        self.updateInitThread = UpdateInitThread(path, faune, flore, self.status_ids)
         self.updateInitThread.finished.connect(self.on_update_search_finished)
         self.updateInitThread.run()
 
-    def on_update_search_finished(self, do_update, path, local_statusIds,
+    def on_update_search_finished(self, do_update, path, local_status_ids,
                                  version, synonyme, new_version,
                                  new_status, new_sources,
                                  save_excel, folder, faune,
@@ -265,11 +265,11 @@ class AutoUpdateTAXREF :
         
         if do_update :
             if debug > 1 :
-                QgsMessageLog.logMessage(f"Les statuts selectionnés sont : {local_statusIds}", "AutoUpdateTAXREF", level=Qgis.Info)
+                QgsMessageLog.logMessage(f"Les statuts selectionnés sont : {local_status_ids}", "AutoUpdateTAXREF", level=Qgis.Info)
                 QgsMessageLog.logMessage(f"Save excel : {save_excel} et folder excel : {folder}", "AutoUpdateTAXREF", level=Qgis.Info)
 
             self.download_window = DownloadWindow(path,
-                                                  local_statusIds,
+                                                  local_status_ids,
                                                   version = version,
                                                   synonyme = synonyme,
                                                   new_version = new_version,

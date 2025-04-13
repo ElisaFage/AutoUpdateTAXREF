@@ -1,5 +1,4 @@
 import os
-from datetime import datetime
 import requests
 import tempfile
 from functools import reduce
@@ -111,55 +110,37 @@ class DownloadThread(QThread):
 
 class SaveTaxrefThread(QThread):
     """
-    A QThread class that handles the asynchronous saving of taxon data 
-    after a download is completed.
+    Une classe QThread pour trier les taxon de TAXREF après leur téléchargement
 
     Attributes:
-        finished (pyqtSignal): Signal emitted when the thread finishes its execution.
-        version (str): The version of the data to be saved.
-        temp_zip_path (str): The path to the temporary ZIP file containing the taxon data.
-        taxonTitle (str): The title of the taxon data (e.g., 'Flora', 'Fauna').
-        taxon_regne (str): The kingdom classification of the taxon data (e.g., 'Plantae', 'Animalia').
-        taxon_groupe_1 (str): The first group of the taxon data classification.
-        taxon_groupe_2 (str): The second group of the taxon data classification.
-        taxon_groupe_3 (str): The third group of the taxon data classification.
-        taxon_famille (str): The family classification of the taxon data.
-        save_path (str): The path where the processed data will be saved.
-        synonyme (bool): Whether to include synonyms in the data processing. Default is False.
+        finished (pyqtSignal): Signal emis quand le thread fini son execution
+        temp_zip_path (str): Chemin du fichier ZIP temporaire contenant les données de TAXREF
+        version (str): Version de TAXREF
+        taxons (list): Liste d'objet TaxonGroupe.
+        save_path (str): Chemin de sauvegarde des données après les tris.
+        synonyme (bool): Pour garder les taxon avec CD_NOM != CD_REF
     """
 
     finished = pyqtSignal()
     
     def __init__(self, temp_zip_path, version, 
-                 taxon_title, taxon_regne,
-                 taxon_groupe_1, taxon_groupe_2,
-                 taxon_groupe_3, taxon_famille,
+                 taxons: list,
                  save_path, synonyme:bool=False):
         """
-        Initializes the SaveTaxrefThread with the provided parameters.
+        Initialise le SaveTaxrefThread avec les paramètres donnés.
 
         Args:
-            temp_zip_path (str): Path to the temporary ZIP file containing the taxon data.
-            version (str): Version of the data to be saved.
-            taxon_title (str): Title of the taxon data (e.g., 'Flora', 'Fauna').
-            taxon_regne (str): Kingdom classification of the taxon data (e.g., 'Plantae', 'Animalia').
-            taxon_groupe_1 (str): First group of the taxon data classification.
-            taxon_groupe_2 (str): Second group of the taxon data classification.
-            taxon_groupe_3 (str): Third group of the taxon data classification.
-            taxon_famille (str): Family classification of the taxon data.
-            save_path (str): Path where the processed data will be saved.
-            synonyme (bool): Whether to include synonyms in the data processing (default is False).
+            temp_zip_path (str): Chemin du fichier ZIP temporaire contenant les données de TAXREF
+            version (str): Version de TAXREF
+            taxons (list): Liste d'objet TaxonGroupe.
+            save_path (str): Chemin de sauvegarde des données après les tris.
+            synonyme (bool): Pour garder les taxon avec CD_NOM != CD_REF
         """
 
         super().__init__()
         self.version = version
         self.temp_zip_path = temp_zip_path
-        self.taxonTitle = taxon_title
-        self.taxon_regne = taxon_regne
-        self.taxon_groupe_1 = taxon_groupe_1
-        self.taxon_groupe_2 = taxon_groupe_2
-        self.taxon_groupe_3 = taxon_groupe_3
-        self.taxon_famille = taxon_famille
+        self.taxons = taxons
         self.save_path = save_path
         self.synonyme = synonyme
 
@@ -175,9 +156,7 @@ class SaveTaxrefThread(QThread):
         """
         # Process the downloaded data and save it to the specified path
         tri_taxon_taxref(self.temp_zip_path, self.version,
-                            self.taxonTitle, self.taxon_regne,
-                            self.taxon_groupe_1, self.taxon_groupe_2,
-                            self.taxon_groupe_3, self.taxon_famille,
+                            self.taxons,
                             self.save_path, self.synonyme)
         # Emit the 'finished' signal to notify that the process is complete
         self.finished.emit()
@@ -295,12 +274,12 @@ class GetStatusThread(QThread):
                     for status_id in self.list_status_id if not (status_id in national_status)]
 
                 # Fusionner les DataFrames sur la colonne "CD_REF"
-                statusUpdatedArray = reduce(
+                status_updated_array = reduce(
                     lambda left, right: pd.merge(left, right, on=col_to_merge, how="outer"), df_to_reduce)
                 
                 print_debug_info(self.debug, 0, f"Start of saving {title} on regional")
                 # Sauvegarde les nouvelles colonnes
-                save_global_status(statusUpdatedArray,
+                save_global_status(status_updated_array,
                                 self.path,
                                 title,
                                 save_type="regional",
@@ -318,12 +297,12 @@ class GetStatusThread(QThread):
                     for status_id in self.list_status_id if status_id in national_status]
             
                 # Fusionner les DataFrames sur la colonne "CD_REF"
-                statusUpdatedArray = reduce(
+                status_updated_array = reduce(
                     lambda left, right: pd.merge(left, right, on=col_to_merge, how="outer"), df_to_reduce)
                 
                 print_debug_info(self.debug, 0, f"Start of saving {title} on national")
                 # Sauvegarde les nouvelles colonnes
-                save_global_status(statusUpdatedArray,
+                save_global_status(status_updated_array,
                                 self.path,
                                 title,
                                 save_type="national",

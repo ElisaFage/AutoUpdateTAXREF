@@ -9,8 +9,7 @@ from datetime import datetime
 import json
 import zipfile
 
-
-from qgis.core import QgsMessageLog, Qgis
+from utils import print_debug_info, get_file_save_path, TaxonGroupe
 
 # Générer l'URL de téléchargement pour une version donnée
 def get_download_url(version):
@@ -70,11 +69,7 @@ def download_zip(link_download: str, save_path: str)-> None:
 
 # Filtrer les lignes du DataFrame selon plusieurs conditions
 def tri_lignes(df:pd.DataFrame,
-              regne:str="Plantae",
-              groupe1:str=["Autres"],
-              groupe2:str=[""],
-              groupe3:str=[""],
-              famille:str=[""],
+              taxon: TaxonGroupe,
               synonyme:bool=False)->pd.DataFrame:
     
     """
@@ -94,38 +89,37 @@ def tri_lignes(df:pd.DataFrame,
         pd.DataFrame: Un DataFrame filtré selon les critères spécifiés.
     """
 
-    # Condition de filtre pour le règne biologique
-    condition_regne= df['REGNE'] == regne
+    # Base : conditions toujours présentes
+    conditions = [
+        df['REGNE'] == taxon.regne,
+        df['GROUP1_INPN'].isin(taxon.groupe1),
+        df['FR'].isin(['P', 'E', 'S', 'C', 'I', 'J', 'M', 'B', 'D', 'G'])
+    ]
 
-    # Condition de filtre pour le groupe de premier niveau
-    condition_groupe = df['GROUP1_INPN'].isin(groupe1)
+    # Ordre, si précisé
+    if taxon.ordre != [""]:
+        conditions.append(df['ORDRE'].isin(taxon.ordre))
 
-    # Si un groupe de deuxième niveau est spécifié, ajouter la condition correspondante
-    if groupe2 != [""]:
-        condition_groupe = condition_groupe & df['GROUP2_INPN'].isin(groupe2)
+    # Groupe2, si précisé
+    if taxon.groupe2 != [""]:
+        conditions.append(df['GROUP2_INPN'].isin(taxon.groupe2))
 
-        # Si un groupe de troisième niveau est spécifié, ajouter la condition correspondante
-        if groupe3 != [""]:
-            condition_groupe = condition_groupe & df['GROUP3_INPN'].isin(groupe3)
+    # Groupe3, si précisé
+    if taxon.groupe3 != [""]:
+        conditions.append(df['GROUP3_INPN'].isin(taxon.groupe3))
 
-            # Si une famille est spécifiée, ajouter la condition correspondante
-            if famille != [""]:
-                condition_groupe = condition_groupe & df['FAMILLE'].isin(famille)
+    # Famille, si précisé
+    if taxon.famille != [""]:
+        conditions.append(df['FAMILLE'].isin(taxon.famille))
 
-    # Condition de présence du nom français (sur certaines valeurs spécifiques)
-    condition_presence_Fr = df['FR'].isin(['P', 'E', 'S', 'C', 'I', 'J','M','B', 'D', 'G'])
+    # Validité taxonomique
+    if not synonyme:
+        conditions.append(df['CD_NOM'] == df['CD_REF'])
 
-    # Condition de validité du taxon : si synonyme est False, le CD_NOM doit être égal au CD_REF
-    if synonyme == False:
-        condition_taxon_valide = df['CD_NOM'] == df['CD_REF']
-    else:
-        # Si synonyme est True, on considère que tous les taxons sont valides
-        condition_taxon_valide = df['CD_REF'] == df['CD_REF']
+    # Application des filtres combinés
+    final_condition = pd.concat(conditions, axis=1).all(axis=1)
 
-    # Appliquer toutes les conditions pour filtrer le DataFrame
-    condition = condition_regne & condition_groupe & condition_presence_Fr & condition_taxon_valide
-    # Filtrer le DataFrame en fonction des conditions
-    df_filtre = df[condition]
+    df_filtre = df[final_condition]
     
     return df_filtre
 
@@ -196,12 +190,9 @@ def supprime_nom_vernaculaire(df:pd.DataFrame, layer:str)->pd.DataFrame:
         # Si la couche ne correspond pas à celles définies, retourner le DataFrame sans modification
         return df
 
-
 def tri_taxon_taxref(temp_zip_path:str,
                         version:int,
-                        titles:list, regnes:list,
-                        groupes1:list, groupes2:list,
-                        groupes3:list, familles:list,
+                        taxons: list,
                         save_path:str,
                         synonyme:bool=False,
                         debug: int=0):
@@ -214,12 +205,7 @@ def tri_taxon_taxref(temp_zip_path:str,
     Args:
         temp_zip_path (str): Le chemin d'accès au fichier ZIP temporaire téléchargé.
         version (int): La version de la base de données TAXREF.
-        titles (list): Liste des titres des couches de taxons (ex. "Flore", "Faune").
-        regnes (list): Liste des règnes pour chaque couche.
-        groupes1 (list): Liste des groupes 1 pour chaque couche.
-        groupes2 (list): Liste des groupes 2 pour chaque couche.
-        groupes3 (list): Liste des groupes 3 pour chaque couche.
-        familles (list): Liste des familles pour chaque couche.
+        taxons (list): Liste d'objets TaxonGroupe.
         save_path (str): Le chemin où enregistrer les fichiers extraits et traités.
         synonyme (bool, optional): Si True, inclut les synonymes dans les résultats. Par défaut, False.
         debug (int, optional): Niveau de débogage pour afficher des informations supplémentaires. Par défaut, 0.
@@ -230,9 +216,8 @@ def tri_taxon_taxref(temp_zip_path:str,
     """
     
     # Si le mode debug est activé, afficher l'heure de début du processus
-    if debug > 1 :
-        now = datetime.now()
-        QgsMessageLog.logMessage(f"Start on_DownloadComplete ({now.hour:02}:{now.minute:02}:{now.second:02}.{now.microsecond // 1000:03})", "AutoUpdateTAXREF", level=Qgis.Info)
+    print_debug_info(debug, 1, f"Start {tri_taxon_taxref.__name__}")
+
 
     # Nom du fichier à ouvrir après extraction
     file_to_open = f"TAXREFv{version}.txt"
@@ -249,11 +234,9 @@ def tri_taxon_taxref(temp_zip_path:str,
     extracted_file_path = os.path.join(save_path, file_to_open)
 
     # Traitement de chaque couche de taxons  
-    for title, regne, groupe1, groupe2, groupe3, famille in zip(titles, regnes, groupes1, groupes2, groupes3, familles):
-        if debug > 1 :
-            now = datetime.now()
-            QgsMessageLog.logMessage(f"Etape de lecture et de tri de la couche {title} ({now.hour:02}:{now.minute:02}:{now.second:02}.{now.microsecond // 1000:03})",
-                                     "AutoUpdateTAXREF", level=Qgis.Info)
+    for taxon in taxons:
+    
+        print_debug_info(debug, 1, f"Etape de lecture et de tri de la couche {taxon.title}")
             
         # Lire le fichier extrait par morceaux (chunks)
         with open(extracted_file_path, 'r', encoding='utf-8') as file:
@@ -269,9 +252,7 @@ def tri_taxon_taxref(temp_zip_path:str,
                     raise TypeError(f"TriLignes attend un DataFrame, mais a reçu {type(chunk)}")
 
                 # Appliquer les fonctions de filtrage sur les données 
-                filtered_chunk = tri_colonnes(tri_lignes(chunk, regne=regne, groupe1=groupe1,
-                                                groupe2=groupe2, groupe3=groupe3, famille=famille,
-                                                synonyme=synonyme), version=version)
+                filtered_chunk = tri_colonnes(taxon.filtre_df(chunk, synonyme=synonyme), version=version)
 
                 filtered_frames.append(filtered_chunk)
 
@@ -280,18 +261,16 @@ def tri_taxon_taxref(temp_zip_path:str,
             df_filtre = pd.concat(filtered_frames, ignore_index=True)
 
             # Supprimer les noms vernaculaires doubles ou vides pour certains taxons
-            df_filtre_nom_vern = supprime_nom_vernaculaire(df=df_filtre, layer=title)
+            df_filtre_nom_vern = supprime_nom_vernaculaire(df=df_filtre, layer=taxon.title)
 
             # Convertir le pandas.DataFrame en geopandas.GeoDataFrame
             gdf = gpd.GeoDataFrame(df_filtre_nom_vern)
 
             # Définir le CRS (bien que ce ne soit pas nécessaire pour les couches non-géométriques)
-            if title == "Flore":
-                file_save_path = os.path.join(save_path, f"{title}.gpkg")
-            else :
-                file_save_path = os.path.join(save_path, f"Faune.gpkg")
+            file_save_path = get_file_save_path(save_path, taxon.title)
+            
             # Enregistrer dans un GeoPackage
-            gdf.to_file(file_save_path, layer=f"Liste {title}", driver="GPKG")
+            gdf.to_file(file_save_path, layer=f"Liste {taxon.title}", driver="GPKG")
     
     # Supprimer les fichiers temporaire ZIP
     os.remove(temp_zip_path)

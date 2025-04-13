@@ -743,77 +743,40 @@ def reorder_columns(df)->pd.DataFrame:
 
     return df[ordered_columns]
 
-def save_regional_status(status_df: pd.DataFrame, path: str, taxon_title: str, debug: int=0):
-    
-    print_debug_info(debug, -1, f"\tPour {taxon_title}, début de sauvegarde regionale")
-    
-    # Enregistrer dans un fichier GeoPackage
-    file_save_path = get_file_save_path(path, taxon_title)  
-    available_layers = gpd.list_layers(file_save_path)
-    layer_name = f"Statuts {taxon_title}"
-
-    if layer_name in available_layers["name"].values:
-        old_file = pd.DataFrame(gpd.read_file(file_save_path, layer=layer_name))
-            
-        col_to_check = ['CD_REF', "Région"]
-        colonnes_sans_cd_ref = [col for col in status_df.columns if ((col not in col_to_check) and (col in old_file.columns))]
-        old_file_light = old_file.drop(columns=colonnes_sans_cd_ref)
-
-        # Merge les nouvelles colonne sur la couche "Status {taxonTitle}"
-        result = pd.merge(old_file_light, status_df, on=['CD_REF', 'Région'], how='outer')
-
-        # Conserver uniquement les lignes où au moins une des colonnes non exclues n'est pas vide
-        reresult = result.dropna(axis=0, how="all", subset=[col for col in result.columns if col not in ["CD_REF", "Région"]])
-
-        #gdf = gpd.GeoDataFrame(result.drop_duplicates())
-        gdf = gpd.GeoDataFrame(reorder_columns(reresult.dropna(axis=1, how="all")).drop_duplicates() )
-
-    else :
-        # gdf = gpd.GeoDataFrame(status_df.drop_duplicates())
-        gdf = gpd.GeoDataFrame(reorder_columns(status_df.dropna(axis=1, how="all")).drop_duplicates())
-
-    gdf.to_file(file_save_path, layer=layer_name, driver="GPKG")
-
-    return
-
-def save_national_status(status_df: pd.DataFrame, path: str, taxon_title: str, debug: int=0):
-    
-    print_debug_info(debug, -1, f"\tPour {taxon_title}, début de sauvegarde nationale")
-
-    # Enregistrer dans un fichier GeoPackage    
-    file_save_path = get_file_save_path(path, taxon_title)
-    old_file = pd.DataFrame(gpd.read_file(file_save_path, layer=f"Liste {taxon_title}"))
-
-    col_to_check = ["CD_REF"]
-    colonnes_sans_cd_ref = [col for col in status_df.columns if ((col not in col_to_check) and (col in old_file.columns))]
-
-    old_file['CD_REF'] = old_file['CD_REF'].astype(str) 
-    status_df['CD_REF'] = status_df['CD_REF'].astype(str)
-
-    print_debug_info(debug, 2, f"Pour {taxon_title} : les colonnes de status_df sont {status_df.columns}")
-
-    result = pd.merge(old_file.drop(columns=colonnes_sans_cd_ref), status_df, on='CD_REF', how='outer').dropna(axis=1, how="all")
-    
-    print_debug_info(debug, 2, f"Pour {taxon_title} : les colonnes de result sont {result.columns}")
-
-    reresult = reorder_columns(result).drop_duplicates()
-
-    if taxon_title == "Oiseaux":
-
-        reresult = reresult.drop(columns=["LRN"])
-
-    print_debug_info(debug, 2, f"Pour {taxon_title} : les colonnes de reresult sont {reresult.columns}")
-
-    gdf = gpd.GeoDataFrame(reresult)
-    gdf.to_file(file_save_path, layer=f"Liste {taxon_title}", driver="GPKG")
-
-    return
-
 def save_global_status(status_df: pd.DataFrame,
                 path: str,
                 taxon_title: str,
                 save_type: str,
                 debug:int=0)->None:
+    """
+    Sauvegarde les statuts d'un taxon (à l'échelle nationale ou régionale) dans un fichier GeoPackage.
+    Cette fonction fusionne les nouveaux statuts avec ceux déjà présents dans un fichier `.gpkg`, en respectant
+    la structure des colonnes et en supprimant les doublons et colonnes vides.
+    
+    Parameters
+    ----------
+    status_df : pd.DataFrame
+        Le DataFrame contenant les statuts à sauvegarder (nouvelles données).
+    path : str
+        Le chemin du dossier où le fichier GeoPackage sera enregistré.
+    taxon_title : str
+        Le nom du taxon (ex. : "Oiseaux", "Mammifères") utilisé pour nommer les couches.
+    save_type : str
+        Indique si la sauvegarde est "national" ou "regional" :
+            - "national" : sauvegarde une liste nationale.
+            - "regional" : sauvegarde une liste avec séparation par région.
+    debug : int, optional
+        Niveau de verbosité pour afficher des messages de débogage (par défaut 0).
+
+    Raises
+    ------
+    ValueError
+        Si le paramètre `save_type` n'est ni "national" ni "regional".
+    
+    Returns
+    -------
+    None
+    """
 
     print_debug_info(debug, -1, f"\tPour {taxon_title}, début de sauvegarde {save_type}")
 
@@ -823,79 +786,127 @@ def save_global_status(status_df: pd.DataFrame,
     regional_value = "regional"
     bird_col = []
 
-    # Enregistrer dans un fichier GeoPackage
+    # Construction du chemin vers le fichier GeoPackage
     file_save_path = get_file_save_path(path, taxon_title)
+
+    # Liste des couches déjà présentes dans le fichier
     available_layers = gpd.list_layers(file_save_path)
+
+    # Choix du nom de la couche et configuration spécifique selon le type de sauvegarde
     if save_type == regional_value:
         layer_name = f"Statuts {taxon_title}"
+        # Fusion régionale implique une clé supplémentaire
         col_to_check.append("Région")
 
     elif save_type == national_value:
         layer_name = f"Liste {taxon_title}"
+        # Cas particulier : pour les oiseaux, ignorer "LRN" lors de la fusion
         bird_col = ["LRN"] if taxon_title == "Oiseaux" else []
     else:
         raise ValueError(f"save_type should be either \"{national_value}\" or \"{regional_value}\" but is : {save_type}")
     
-    # Traitement pour la fusion des tableaux
+    # Si une couche existe déjà, on la lit et prépare une fusion avec les nouvelles données
     if layer_name in available_layers["name"].values:
         old_file = pd.DataFrame(gpd.read_file(file_save_path, layer=layer_name))
 
+        # Forcer les colonnes clé en chaîne pour éviter les erreurs de jointure
         old_file['CD_REF'] = old_file['CD_REF'].astype(str) 
         status_df['CD_REF'] = status_df['CD_REF'].astype(str)
  
+        # Colonnes communes à retirer de l'ancien fichier pour ne pas écraser les nouvelles données
         colonnes_sans_cd_ref = [col for col in status_df.columns if ((col not in col_to_check) and (col in old_file.columns))]
         
         print_debug_info(debug, 2, f"Pour {taxon_title} : les colonnes de status_df sont {status_df.columns}")
+
+        # Nettoyer la version ancienne pour préparer le merge
         old_file_light = old_file.drop(columns=colonnes_sans_cd_ref+bird_col)
 
-        # Conserver uniquement les lignes où au moins une des colonnes non exclues n'est pas vide
+        # Colonnes à tester pour la suppression des lignes vides après fusion
         subset_col_dropna = [col for col in status_merged.columns if col not in col_to_check]
         
-        # Merge les nouvelles colonne sur la couche "Status {taxonTitle}"
+        # Fusion : priorise les clés communes et conserve les lignes valides
         if save_type == regional_value:
             status_merged = pd.merge(old_file_light, status_df, on=col_to_check, how='outer').dropna(axis=0, how="all", subset=subset_col_dropna)
         else:
             status_merged = pd.merge(old_file_light, status_df, on=col_to_check, how='outer')
 
+        # Supprime les colonnes vides de la table fusionnée
         status_na_dropped = status_merged.dropna(axis=1, how="all")
 
     else:
+        # Si aucune couche existante, on nettoie juste les colonnes vides
         status_na_dropped = status_df.dropna(axis=1, how="all")
 
     print_debug_info(debug, 2, f"Pour {taxon_title} : les colonnes de result sont {status_na_dropped.columns}")
 
+    # Réorganise les colonnes de manière standard et supprime les doublons
     status_to_save = reorder_columns(status_na_dropped).drop_duplicates()
 
     print_debug_info(debug, 2, f"Pour {taxon_title} : les colonnes de reresult sont {status_to_save.columns}")
         
+    # Convertit le DataFrame en GeoDataFrame et sauvegarde dans le fichier GeoPackage
     gdf = gpd.GeoDataFrame(status_to_save)
     gdf.to_file(file_save_path, layer=layer_name, driver="GPKG")
 
     return
 
 def save_new_sources(path: str,
-                   newVer: bool=False,
+                   new_version: bool=False,
                    newSources: pd.DataFrame=pd.DataFrame(columns=["id", "fullCitation"]))->None:
+    """
+    Met à jour et sauvegarde les sources bibliographiques dans un fichier GeoPackage.
 
+    Cette fonction permet d'enregistrer des sources de références associées aux taxons dans une couche nommée "Source" 
+    au sein du fichier `Autre.gpkg`. Selon le paramètre `new_version`, elle peut :
+        - soit récupérer les sources des deux dernières années,
+        - soit fusionner de nouvelles sources fournies en argument avec les sources existantes.
+
+    Parameters
+    ----------
+    path : str
+        Le chemin du dossier contenant (ou devant contenir) le fichier `Autre.gpkg`.
+    new_version : bool, optional
+        Si `True`, recharge uniquement les sources des deux dernières années et écrase les anciennes.
+        Si `False`, ajoute les `newSources` passées en argument aux sources existantes. (par défaut False)
+    newSources : pd.DataFrame, optional
+        DataFrame contenant les nouvelles sources à ajouter. Doit avoir deux colonnes : ["id", "fullCitation"].
+        Ignoré si `new_version=True`. (par défaut un DataFrame vide)
+
+    Returns
+    -------
+    None
+    """
+
+    # Définition du chemin vers le fichier GeoPackage
     file_path_source = os.path.join(path, "Autre.gpkg")
-    if newVer :
+
+    if new_version :
+        # Si newVer est activé, on charge uniquement les sources des deux dernières années
         current_year = date.today().year
         sources = pd.concat([get_sources_from_year(current_year),
                              get_sources_from_year(current_year-1)], ignore_index=True)[["id", "fullCitation"]]
 
     else :
+        # Sinon, on tente de charger les sources déjà présentes dans "Autre.gpkg"
         if os.path.isfile(file_path_source):
             available_layer = gpd.list_layers(file_path_source)
+
+            # Vérifie si la couche "Source" existe déjà
             if "Source" in available_layer["name"].values:
                 sources = pd.DataFrame(gpd.read_file(file_path_source, layer="Source"))
             else :
+                # Si la couche n'existe pas, on part d'un DataFrame vide
                 sources = pd.DataFrame(columns=["id", "fullCitation"])
         else :
+            # Si le fichier n'existe pas, initialise également une table vide
             sources =  pd.DataFrame(columns=["id", "fullCitation"])
 
+        # Ajout des nouvelles sources passées en paramètre
         sources = pd.concat([sources, newSources], ignore_index=True)
     
+    # Conversion en GeoDataFrame avant sauvegarde
     sources_gdf = gpd.GeoDataFrame(sources)
+    # Sauvegarde dans le fichier GeoPackage sous la couche "Source"
     sources_gdf.to_file(file_path_source, layer="Source")
 
     return

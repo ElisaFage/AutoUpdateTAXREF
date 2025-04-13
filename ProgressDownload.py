@@ -3,8 +3,7 @@ import pandas as pd
 from PyQt5.QtWidgets import (
     QApplication,  QWidget, QVBoxLayout,
     QProgressBar, QPushButton, QLabel)
-from PyQt5.QtCore import Qt, pyqtSignal
-from qgis.core import QgsMessageLog, Qgis
+from PyQt5.QtCore import pyqtSignal
 
 from .UpdateThreadClasses import (
     GetURLThread,
@@ -14,6 +13,8 @@ from .UpdateThreadClasses import (
     SaveSourcesThread,
 )
 
+from .utils import (print_debug_info,
+                    TAXONS)
 
 class DownloadWindow(QWidget):
     """
@@ -34,64 +35,13 @@ class DownloadWindow(QWidget):
 
     # Attributs de classe définissant les taxons
     version = None
-    taxon_titles = [
-        "Flore", "Amphibiens", "Reptiles", "Oiseaux", "Mammifères",
-        "Lépidoptères", "Odonates", "Coléoptères", "Orthoptères"
-    ]
-    taxon_regnes = [
-        "Plantae", "Animalia", "Animalia", "Animalia", "Animalia",
-        "Animalia", "Animalia", "Animalia", "Animalia"
-    ]
-    taxon_groupes_1 = [
-        ["Algues", "Trachéophytes", "Bryophytes"],
-        ["Chordés"], ["Chordés"], ["Chordés"], ["Chordés"],
-        ["Arthropodes"], ["Arthropodes"], ["Arthropodes"], ["Arthropodes"]
-    ]
-    taxon_groupes_2 = [
-        [""],
-        ["Amphibiens"], ["Reptiles"], ["Oiseaux"], ["Mammifères"],
-        ["Insectes"], ["Insectes"], ["Insectes"], ["Insectes"]
-    ]
-    taxon_groupes_3 = [
-        [""],
-        [""], [""], [""], [""],
-        ["Lépidoptères"], ["Odonates"], ["Coléoptères"], ["Orthoptères"]
-    ]
-    taxon_famille = [
-        [""],
-        [""], [""], [""], [""],
-        [
-            "Papilionidae", "Pieridae", "Nymphalidae", "Satyrinae",
-            "Lycaenidae", "Hesperiidae", "Zygaenidae"
-        ],
-        [""],
-        [
-            "Carabidae", "Hydrophilidae", "Sphaeritidae", "Histeridae",
-            "Ptiliidae", "Agyrtidae", "Leiodidae", "Staphylinidae",
-            "Lucanidae", "Trogidae", "Scarabaeidae", "Eucinetidae",
-            "Clambidae", "Scirtidae", "Buprestidae", "Elmidae", "Dryopidae",
-            "Cerophytidae", "Eucnemidae", "Throscidae", "Elateridae",
-            "Lycidae", "Cantharidae", "Derodontidae", "Nosodendridae",
-            "Dermestidae", "Endecatomidae", "Bostrichidae", "Ptinidae",
-            "Lymexylidae", "Phloiophilidae", "Trogossitidae", "Thanerocleridae",
-            "Cleridae", "Acanthocnemidae", "Melyridae", "Malachiidae",
-            "Sphindidae", "Nitidulidae", "Monotomidae", "Phloeostichidae",
-            "Silvanidae", "Cucujidae", "Laemophloeidae", "Cryptophagidae",
-            "Erotylidae", "Biphyllidae", "Bothrideridae", "Cerylonidae",
-            "Alexiidae", "Endomychidae", "Corylophidae", "Latridiidae",
-            "Mycetophagidae", "Ciidae", "Tetratomidae", "Melandryidae",
-            "Zopheridae", "Mordellidae", "Tenebrionidae", "Prostomidae",
-            "Oedemeridae", "Pythidae", "Pyrochroidae", "Salpingidae",
-            "Aderidae", "Scraptiidae", "Cerambycidae", "Chrysomelidae",
-            "Anthribidae", "Brentidae", "Dryophthoridae", "Curculionidae"
-        ],
-        [
-            "Acrididae", "Gryllidae", "Gryllotalpidae", "Mogoplistida",
-            "Myrmecophilidae", "Pamphagidae", "Phalangopsidae",
-            "Pyrgomorphidae", "Rhaphidophoridae", "Tetrigidae",
-            "Tettigoniidae", "Tridactylidae", "Trigonidiidae"
-        ]
-    ]
+    """taxon_titles = TAXON_TITLES
+    taxon_regnes = TAXON_REGNES
+    taxon_ordres = TAXON_ORDRES
+    taxon_groupes_1 = TAXON_GROUPES_1
+    taxon_groupes_2 = TAXON_GROUPES_2
+    taxon_groupes_3 = TAXON_GROUPES_3
+    taxon_famille = TAXON_FAMILLE"""
 
     def __init__(self, path: str, status_ids: list,
                  version: int = None,
@@ -103,6 +53,7 @@ class DownloadWindow(QWidget):
                  folder: str = "",
                  faune: bool = True,
                  flore: bool = True,
+                 fungi: bool = True,
                  debug: int = 0):
         """
         Initialise la fenêtre de téléchargement de TAXREF.
@@ -144,12 +95,17 @@ class DownloadWindow(QWidget):
         self.current_step = 0
         self.total_steps = 6 if new_version else 3 if new_status else 1
 
-        # Filtrer les taxons selon les paramètres 'faune' et 'flore'
-        if not faune:
-            self._filter_taxa("Animalia")
-
-        if not flore:
-            self._filter_taxa("Plantae")
+        # Filtrer les taxons selon les paramètres 'faune', 'flore' et 'fungi' 
+        self.taxons = []
+        if faune :
+            self.taxons.append(self._filter_taxa('faune'))
+        if flore : 
+            self.taxons.append(self._filter_taxa("flore"))
+        if fungi :
+            self.taxons.append(self._filter_taxa("fungi"))
+        
+        # Récupère les titre des différents taxons
+        self.taxon_titles = [taxon.title for taxon in self.taxons]
 
         self._setup_ui()
 
@@ -157,16 +113,20 @@ class DownloadWindow(QWidget):
         if new_version:
             self._start_get_url()
         elif new_status:
-            self.__start_download_status()
+            self._start_download_status()
         else:
-            self.__start_save_sources()
+            self._start_save_sources()
 
     def _filter_taxa(self, regne: str):
         """Filtrer les taxons par règne."""
-        indices = [i for i, r in enumerate(self.taxon_regnes) if r == regne]
-        for attr in ['taxon_titles', 'taxon_regnes', 'taxon_groupes_1',
+        #Ne garde que les taxons dont le regne est le même que celui du paramètre 'regne'
+        taxons = [taxon for taxon in TAXONS if getattr(taxon, f"is{regne}")]
+        """indices = [i for i, r in enumerate(self.taxon_regnes) if r == regne]
+        for attr in ['taxon_titles', 'taxon_regnes', 'taxon_ordres', 'taxon_groupes_1',
                      'taxon_groupes_2', 'taxon_groupes_3', 'taxon_famille']:
-            setattr(self, attr, [v for i, v in enumerate(getattr(self, attr)) if i not in indices])
+            setattr(self, attr, [v for i, v in enumerate(getattr(self, attr)) if i not in indices])"""
+        
+        return taxons
 
     def _setup_ui(self):
         """Configurer l'interface utilisateur."""
@@ -273,12 +233,7 @@ class DownloadWindow(QWidget):
         self.save_taxref_thread = SaveTaxrefThread(
             self.file_path,
             self.version,
-            self.taxon_titles,
-            self.taxon_regnes,
-            self.taxon_groupes_1,
-            self.taxon_groupes_2,
-            self.taxon_groupes_3,
-            self.taxon_famille,
+            self.taxons,
             self.save_path,
             self.synonyme
         )
@@ -324,7 +279,7 @@ class DownloadWindow(QWidget):
         self._increment_step()
         self.update_global_progress_label("Téléchargement des statuts terminé")
 
-        QgsMessageLog.logMessage("In start save sources", "AutoUpdateTAXREF", level=Qgis.Info)
+        print_debug_info(self.debug, -1, "In start save sources")
         self.save_sources_thread = SaveSourcesThread(
             self.save_path, self.new_version, self.new_sources
         )
@@ -339,7 +294,7 @@ class DownloadWindow(QWidget):
         """
         Callback appelé lorsque l'enregistrement des sources est terminé.
         """
-        QgsMessageLog.logMessage("In sources saved", "AutoUpdateTAXREF", level=Qgis.Info)
+        print_debug_info(self.debug, -1, "In sources saved")
         self._increment_step()
         self.close()
 
