@@ -43,19 +43,19 @@ Recherchez et installez le plugin directement depuis le gestionnaire d'extension
 
 🐦 Faune
 * Avifaune : Classe Aves
-* Amphibien : Classe Amphibia
-* Reptile : GROUP2_INPN
-* Mammifere (terrestres, aquatiques, semi-aquatiques) : Ordres Afrosoricida, Carnivora, Cetartiodactyla, Diprotodontia, Eulipotyphla, Lagomorpha, Perissodactyla, Proboscidea, Rodentia
-* Chiropere : Ordre Chiroptera
-* Poisson : GROUP2_INPN Poissons
-* Mollusque : GROUP2_INPN Mollusques
+* Amphibiens : Classe Amphibia
+* Reptiles : GROUP2_INPN
+* Mammifères (terrestres, aquatiques, semi-aquatiques) : Ordres Afrosoricida, Carnivora, Cetartiodactyla, Diprotodontia, Eulipotyphla, Lagomorpha, Perissodactyla, Proboscidea, Rodentia
+* Chiropères : Ordre Chiroptera
+* Poissons : GROUP2_INPN Poissons
+* Mollusques : GROUP2_INPN Mollusques
 
 🦋 Insectes
-* Odonate : Ordre Odonata
-* Orthoptere : Familles Acrididae, Gryllidae, Gryllotalpidae, Mogoplistidae, Myrmecophilidae, Pamphagidae, Phalangopsidae, Pyrgomorphidae, Rhaphidophoridae, Tetrigidae, Tettigoniidae, Tridactylidae, Trigonidiidae
-* Lepidoptere : Familles Papilionidae, Pieridae, Nymphalidae, Satyrinae, Lycaenidae, Hesperiidae, Zygaenidae
-* Coleoptere : Familles Carabidae, Hydrophilidae, Sphaeritidae, Histeridae, Ptiliidae, Agyrtidae, Leiodidae, Staphylinidae, Lucanidae, Trogidae, Scarabaeidae, Eucinetidae, Clambidae, Scirtidae, Buprestidae, Elmidae, Dryopidae, Cerophytidae, Eucnemidae, Throscidae, Elateridae, Lycidae, Cantharidae, Derodontidae, Nosodendridae, Dermestidae, Endecatomidae, Bostrichidae, Ptinidae, Lymexylidae, Phloiophilidae, Trogossitidae, Thanerocleridae, Cleridae, Acanthocnemidae, Melyridae, Malachiidae, Sphindidae, Nitidulidae, Monotomidae, Phloeostichidae, Silvanidae, Cucujidae, Laemophloeidae, Cryptophagidae, Erotylidae, Biphyllidae, Bothrideridae, Cerylonidae, Alexiidae, Endomychidae, Corylophidae, Latridiidae, Mycetophagidae, Ciidae, Tetratomidae, Melandryidae, Zopheridae, Mordellidae, Tenebrionidae, Prostomidae, Oedemeridae, Pythidae, Pyrochroidae, Salpingidae, Aderidae, Scraptiidae, Cerambycidae, Chrysomelidae, Anthribidae, Brentidae, Dryophthoridae, Curculionidae
-* Ephemere : Ordre Ephemeroptera
-* Araignee : GROUP3_INPN Araignées, Opilions, Pseudoscorpions, Scorpions
-* Crustace : GROUP2_INPN Crustacés
+* Odonates : Ordre Odonata
+* Orthoptères : Familles Acrididae, Gryllidae, Gryllotalpidae, Mogoplistidae, Myrmecophilidae, Pamphagidae, Phalangopsidae, Pyrgomorphidae, Rhaphidophoridae, Tetrigidae, Tettigoniidae, Tridactylidae, Trigonidiidae
+* Lepidoptères : Familles Papilionidae, Pieridae, Nymphalidae, Satyrinae, Lycaenidae, Hesperiidae, Zygaenidae
+* Coleoptères : Familles Carabidae, Hydrophilidae, Sphaeritidae, Histeridae, Ptiliidae, Agyrtidae, Leiodidae, Staphylinidae, Lucanidae, Trogidae, Scarabaeidae, Eucinetidae, Clambidae, Scirtidae, Buprestidae, Elmidae, Dryopidae, Cerophytidae, Eucnemidae, Throscidae, Elateridae, Lycidae, Cantharidae, Derodontidae, Nosodendridae, Dermestidae, Endecatomidae, Bostrichidae, Ptinidae, Lymexylidae, Phloiophilidae, Trogossitidae, Thanerocleridae, Cleridae, Acanthocnemidae, Melyridae, Malachiidae, Sphindidae, Nitidulidae, Monotomidae, Phloeostichidae, Silvanidae, Cucujidae, Laemophloeidae, Cryptophagidae, Erotylidae, Biphyllidae, Bothrideridae, Cerylonidae, Alexiidae, Endomychidae, Corylophidae, Latridiidae, Mycetophagidae, Ciidae, Tetratomidae, Melandryidae, Zopheridae, Mordellidae, Tenebrionidae, Prostomidae, Oedemeridae, Pythidae, Pyrochroidae, Salpingidae, Aderidae, Scraptiidae, Cerambycidae, Chrysomelidae, Anthribidae, Brentidae, Dryophthoridae, Curculionidae
+* Ephémères : Ordre Ephemeroptera
+* Araignées : GROUP3_INPN Araignées, Opilions, Pseudoscorpions, Scorpions
+* Crustacés : GROUP2_INPN Crustacés
   
