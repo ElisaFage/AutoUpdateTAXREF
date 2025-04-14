@@ -5,6 +5,63 @@ from PyQt5.QtWidgets import (QApplication, QDialog, QVBoxLayout,
                              QFileDialog)
 from PyQt5.QtCore import Qt
 
+class UpdateTAXREFDialog(QDialog):
+
+    def __init__(self, version: int):
+        
+        super().__init__()
+
+        self.setWindowTitle("Mise à jour disponible")
+
+        # Variables internes de réponse utilisateur
+        self.user_response = False  # False pour "Non" par défaut
+        self.dont_ask_again = False
+
+        # Layout principal
+        layout = QVBoxLayout()
+
+        self.text = QLabel(f'Une nouvelle version de TAXREF (version {version}) est disponible.\nVoulez vous mettre TAXREF à jour ?')
+        layout.addWidget(self.text)
+
+        # Boutons Oui et Non
+        # Crée un layout pour les boutons
+        button_layout = QHBoxLayout()
+
+        # Crée un bouton "Oui"
+        self.yes_button = QPushButton("Oui")
+        # Connecte le click sur le bouton à on_yes_clicked
+        self.yes_button.clicked.connect(self.on_yes_clicked)
+        # Ajoute le bouton "Oui" au layout des boutons
+        button_layout.addWidget(self.yes_button)
+
+        # Crée un bouton "Non"
+        self.no_button = QPushButton("Non")
+        # Connecte le click sur le bouton à on_no_clicked
+        self.no_button.clicked.connect(self.on_no_clicked)
+        # Définit "Non" comme bouton par défaut
+        self.no_button.setDefault(True)
+        # Ajoute le bouton "Non" au layout des boutons
+        button_layout.addWidget(self.no_button)
+
+        # Ajout du layout des boutons au layout principal
+        layout.addLayout(button_layout)
+        # Application du layout à la boîte de dialogue
+        self.setLayout(layout)
+
+    def on_yes_clicked(self):
+        """
+        Enregistre une réponse positive et ferme la boîte de dialogue.
+        """
+        self.user_response = True
+        self.accept()
+
+    def on_no_clicked(self):
+        """
+        Enregistre une réponse négative et ferme la boîte de dialogue.
+        """
+        self.user_response = False
+        self.accept()
+
 class UpdateStatusDialog(QDialog):
     """
     Boîte de dialogue permettant à l'utilisateur de confirmer une mise à jour de statuts
@@ -250,28 +307,16 @@ def ask_update(version: int):
     """
     
     # Initialise la fenêtre
-    msg_box = QMessageBox()
-    # Fenetre de question
-    msg_box.setIcon(QMessageBox.Question)
-    # Prépare le titre de la fenêtre
-    msg_box.setWindowTitle('Confirmation de la Mise à jour de TAXREF')
-    # Pose la question
-    msg_box.setText(f'Une nouvelle version de TAXREF (version {version}) est disponible.\nVoulez vous mettre TAXREF à jour ?')
-    # Initialise les choix de réponse
-    msg_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-    # Attribut une réponse par défaut
-    msg_box.setDefaultButton(QMessageBox.No)
+
+    ask_update_dialog = UpdateTAXREFDialog(version)
+    ask_dialog_result = ask_update_dialog.exec()
+
+    do_update = ask_update_dialog.user_response
+
+    if ask_dialog_result == QDialog.Accepted and do_update :
+        return do_update
     
-    # Génère et affiche la fenêtre 
-    result = msg_box.exec_()
-
-    # Renvoie la réponse de l'utilisateur
-    if result == QMessageBox.Yes:
-        to_return = True
-    else:
-        to_return = False
-
-    return to_return
+    return False
 
 def ask_save_excel():
     """

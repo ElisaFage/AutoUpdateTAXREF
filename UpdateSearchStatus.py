@@ -4,120 +4,183 @@ import numpy as np
 import pandas as pd
 import geopandas as gpd
 
-from qgis.core import QgsMessageLog, Qgis
+from .utils import print_debug_info, save_dataframe
 
 from datetime import date
 
-# Récupère les source de l'année {year}
-def get_sources_from_year(year: int)->pd.DataFrame:
-    """
-    Récupère les sources bibliographiques pour un certain année à partir de l'API TAXREF.
 
-    Cette fonction interroge l'API TAXREF pour obtenir les sources bibliographiques
-    associées à une année spécifique. Elle filtre ensuite les sources en fonction
-    de termes discriminants dans la citation complète de la source.
+class SourcesManager():
 
-    Args:
-        year (int): L'année pour laquelle les sources doivent être récupérées.
+    required_columns = ["id", "fullCitation"]
 
-    Returns:
-        pd.DataFrame: Un DataFrame contenant les sources filtrées associées à l'année spécifiée.
-    """
-
-    # URL de l'API TAXREF pour récupérer les sources par année
-    url = f"https://taxref.mnhn.fr/api/sources/findByTerm/{year}"
-
-    # Envoi de la requête GET à l'API et récupération des données JSON
-    response = requests.get(url)
-    data_json = response.json()
-
-    # Extraire et normaliser les données des sources bibliographiques
-    sources_list = data_json.get('_embedded', {}).get('bibliography', [])
-    df_sources = pd.json_normalize(sources_list, sep = '_')
-
-    # Filtrage des sources contenant des termes spécifiques dans la citation
-    listDiscriminant = ["Liste Rouge", "Arrêté", "Directive", "Plan national", "Règlement d'exécution", "ZNIEFF", "ZNIEFFS"]
-    df_sources = df_sources[df_sources["fullCitation"].apply(
-        lambda x: any(substring.lower() in x.lower() for substring in listDiscriminant) if isinstance(x, str) else False)]
+    def __init__(self, path: str, new_version: bool=False, year:int=None, debug: int=0):
     
-    return df_sources
+        self.path = os.path.join(path, "Donnée.gpkg")
+        self.new_version = new_version
 
-# Compare les listes de sources
-def check_new_sources(mySources: pd.DataFrame, currentSources: pd.DataFrame, file_path: str)->pd.DataFrame:
-    """
-    Vérifie les nouvelles sources en comparant deux DataFrames de sources bibliographiques.
-
-    Cette fonction compare deux DataFrames (mySources et currentSources) pour identifier
-    les sources présentes dans `currentSources` mais absentes dans `mySources` en utilisant l'ID.
-    Si des sources sont identifiées, elles sont retournées sous forme d'un DataFrame.
-
-    Args:
-        mySources (pd.DataFrame): DataFrame contenant les sources de l'utilisateur.
-        currentSources (pd.DataFrame): DataFrame contenant les sources actuelles.
-        file_path (str): Chemin de fichier où les nouvelles sources seront sauvegardées (actuellement non utilisé).
-
-    Returns:
-        pd.DataFrame: Un DataFrame contenant les sources présentes dans `currentSources` mais absentes de `mySources`.
-    """
-
-    # Trouver les éléments de `currentSources` dont l'ID est absent de `mySources`
-    ids_absents = currentSources[~currentSources['id'].astype(str).isin(mySources['id'].astype(str).values)]
-
-    # Retourner les sources absentes sous forme de DataFrame
-    return ids_absents
-
-# Chreche s'il y a de nouvelles source pour faire une mise à jour
-def check_update_status(path: str, debug: int=0)->pd.DataFrame:
-    """
-    Vérifie s'il y a des nouvelles sources pour effectuer une mise à jour.
-
-    Cette fonction recherche les nouvelles sources dans un fichier géospatial "Autre.gpkg"
-    et compare les sources existantes avec celles des deux dernières années (l'année en cours et l'année précédente).
-    Si de nouvelles sources sont trouvées, elles sont retournées sous forme de DataFrame.
-
-    Args:
-        path (str): Le chemin vers le répertoire contenant le fichier "Autre.gpkg".
-        debug (int, optional): Niveau de débogage pour l'affichage des logs (par défaut 0, 1 ou 2).
-
-    Returns:
-        pd.DataFrame: Un DataFrame contenant les nouvelles sources à ajouter.
-    """
-
-    # Obtenir l'année en cours
-    current_year = date.today().year
-
-    # Définir le chemin du fichier contenant les sources
-    file_path = os.path.join(path, "Autre.gpkg")
-
-    # Si le fichier existe, lire les sources existantes
-    if os.path.isfile(file_path):
-        if debug > 1 :
-            QgsMessageLog.logMessage(f"SaveRegionStatus : cherche available_layer", "AutoUpdateTAXREF", level=Qgis.Info)
-
-        # Liste des couches disponibles dans le fichier GPKG
-        available_layers = gpd.list_layers(file_path)
-
-        # Si la couche "Source" existe, lire les données dans un DataFrame
-        if "Source" in available_layers["name"].values :
-            mySources = pd.DataFrame(gpd.read_file(file_path, layer="Source"))
-        else :
-            # Si la couche "Source" n'existe pas, créer un DataFrame vide avec les colonnes appropriées
-            mySources = pd.DataFrame(columns = ["id", "fullCitation"])
-    else :
-        # Si le fichier n'existe pas, créer un DataFrame vide
-        mySources = pd.DataFrame(columns=["id", "fullCitation"])
+        self.current_year = year if year != None else date.today().year
+        self.last_year = self.current_year - 1
         
-    # Récupérer les sources de l'année en cours et de l'année précédente
-    currentSources = pd.concat([get_sources_from_year(current_year),
-                                get_sources_from_year(current_year-1)], ignore_index=True)
+        self.debug = debug
 
-    # Vérifier les nouvelles sources
-    ids_absents = check_new_sources(mySources, currentSources, file_path)
+        self.data_sources = pd.DataFrame(columns = self.required_columns)
+        self.new_sources = pd.DataFrame(columns = self.required_columns)
+        self.layer_name = "Sources"
 
-    # Filtrer les sources absentes
-    newSources = currentSources[currentSources["id"].astype(str).isin(ids_absents["id"].astype(str).values)][["id", "fullCitation"]].copy()
+    def set_data_sources(self):
+        # Si le fichier existe, lire les sources existantes
+        if os.path.isfile(self.path):
+            print_debug_info(self.debug, 1, f"{self.check_update_status.__name__} : cherche available_layer")
+   
+            # Liste des couches disponibles dans le fichier GPKG
+            available_layers = gpd.list_layers(self.path)
 
-    if debug > 1 :
-        QgsMessageLog.logMessage(f"Les id absent sont : {ids_absents["id"].values}", "AutoUpdateTAXREF", level=Qgis.Info)
+            # Si la couche "Source" existe, lire les données dans un DataFrame
+            if self.layer_name in available_layers["name"].values :
+                self.data_sources = pd.DataFrame(gpd.read_file(self.path, layer=self.layer_name))
 
-    return newSources
+        return
+
+    def get_new_sources_list(self)->list:
+        text_lines = self.new_sources["fullCitation"].to_list()
+        return text_lines
+
+    # Récupère les source de l'année {year}
+    def get_sources_from_year(self, year:int)->pd.DataFrame:
+        """
+        Récupère les sources bibliographiques pour un certain année à partir de l'API TAXREF.
+
+        Cette fonction interroge l'API TAXREF pour obtenir les sources bibliographiques
+        associées à une année spécifique. Elle filtre ensuite les sources en fonction
+        de termes discriminants dans la citation complète de la source.
+
+        Args:
+            year (int): L'année pour laquelle les sources doivent être récupérées.
+
+        Returns:
+            pd.DataFrame: Un DataFrame contenant les sources filtrées associées à l'année spécifiée.
+        """
+
+        # URL de l'API TAXREF pour récupérer les sources par année
+        url = f"https://taxref.mnhn.fr/api/sources/findByTerm/{year}"
+
+        # Envoi de la requête GET à l'API et récupération des données JSON
+        response = requests.get(url)
+        data_json = response.json()
+
+        # Extraire et normaliser les données des sources bibliographiques
+        sources_list = data_json.get('_embedded', {}).get('bibliography', [])
+        df_sources = pd.json_normalize(sources_list, sep = '_')
+
+        # Filtrage des sources contenant des termes spécifiques dans la citation
+        listDiscriminant = ["Liste Rouge", "Arrêté", "Directive", "Plan national", "Règlement d'exécution", "ZNIEFF", "ZNIEFFS"]
+        df_sources = df_sources[df_sources["fullCitation"].apply(
+            lambda x: any(substring.lower() in x.lower() for substring in listDiscriminant) if isinstance(x, str) else False)]
+        
+        return df_sources
+
+    # Compare les listes de sources
+    def check_new_sources(self, my_sources: pd.DataFrame, current_sources: pd.DataFrame)->pd.DataFrame:
+        """
+        Vérifie les nouvelles sources en comparant deux DataFrames de sources bibliographiques.
+
+        Cette fonction compare deux DataFrames (mySources et currentSources) pour identifier
+        les sources présentes dans `currentSources` mais absentes dans `mySources` en utilisant l'ID.
+        Si des sources sont identifiées, elles sont retournées sous forme d'un DataFrame.
+
+        Args:
+            mySources (pd.DataFrame): DataFrame contenant les sources de l'utilisateur.
+            currentSources (pd.DataFrame): DataFrame contenant les sources actuelles.
+            file_path (str): Chemin de fichier où les nouvelles sources seront sauvegardées (actuellement non utilisé).
+
+        Returns:
+            pd.DataFrame: Un DataFrame contenant les sources présentes dans `currentSources` mais absentes de `mySources`.
+        """
+
+        # Trouver les éléments de `currentSources` dont l'ID est absent de `mySources`
+        ids_absents = current_sources[~current_sources['id'].astype(str).isin(my_sources['id'].astype(str).values)]
+
+        # Retourner les sources absentes sous forme de DataFrame
+        return ids_absents
+
+    # Chreche s'il y a de nouvelles source pour faire une mise à jour
+    def check_update_status(self)->pd.DataFrame:
+        """
+        Vérifie s'il y a des nouvelles sources pour effectuer une mise à jour.
+
+        Cette fonction recherche les nouvelles sources dans un fichier géospatial "Autre.gpkg"
+        et compare les sources existantes avec celles des deux dernières années (l'année en cours et l'année précédente).
+        Si de nouvelles sources sont trouvées, elles sont retournées sous forme de DataFrame.
+
+        Args:
+            path (str): Le chemin vers le répertoire contenant le fichier "Autre.gpkg".
+            debug (int, optional): Niveau de débogage pour l'affichage des logs (par défaut 0, 1 ou 2).
+
+        Returns:
+            pd.DataFrame: Un DataFrame contenant les nouvelles sources à ajouter.
+        """
+
+        # Si le fichier existe, lire les sources existantes
+        self.set_data_sources()
+            
+        # Récupérer les sources de l'année en cours et de l'année précédente
+        currentSources = pd.concat([self.get_sources_from_year(self.current_year),
+                                    self.get_sources_from_year(self.last_year)], ignore_index=True)
+
+        # Vérifier les nouvelles sources
+        ids_absents = self.check_new_sources(self.data_sources, currentSources)
+
+        # Filtrer les sources absentes
+        new_sources = currentSources[currentSources["id"].astype(str).isin(ids_absents["id"].astype(str).values)][self.required_columns].copy()
+
+        print_debug_info(self.debug, 1, f"Les id absent sont : {ids_absents["id"].values}")
+
+        self.new_sources = new_sources
+
+        return
+
+    def set_new_version(self, new_version: bool):
+        self.new_version=new_version
+        return
+
+    def save_new_sources(self)->None:
+        """
+        Met à jour et sauvegarde les sources bibliographiques dans un fichier GeoPackage.
+
+        Cette fonction permet d'enregistrer des sources de références associées aux taxons dans une couche nommée "Source" 
+        au sein du fichier `Autre.gpkg`. Selon le paramètre `new_version`, elle peut :
+            - soit récupérer les sources des deux dernières années,
+            - soit fusionner de nouvelles sources fournies en argument avec les sources existantes.
+
+        Parameters
+        ----------
+        path : str
+            Le chemin du dossier contenant (ou devant contenir) le fichier `Autre.gpkg`.
+        new_version : bool, optional
+            Si `True`, recharge uniquement les sources des deux dernières années et écrase les anciennes.
+            Si `False`, ajoute les `newSources` passées en argument aux sources existantes. (par défaut False)
+        newSources : pd.DataFrame, optional
+            DataFrame contenant les nouvelles sources à ajouter. Doit avoir deux colonnes : ["id", "fullCitation"].
+            Ignoré si `new_version=True`. (par défaut un DataFrame vide)
+
+        Returns
+        -------
+        None
+        """
+
+
+        if self.new_version :
+            # Si new_version est activé, on charge uniquement les sources des deux dernières années
+            self.data_sources = pd.concat([self.get_sources_from_year(self.current_year),
+                                 self.get_sources_from_year(self.last_year)], ignore_index=True)[self.required_columns]
+
+        else :
+            # Sinon, on tente de charger les sources déjà présentes dans "Données.gpkg"
+            self.set_data_sources()
+
+            # Ajout des nouvelles sources passées en paramètre
+            self.data_sources = pd.concat([self.data_sources, self.new_sources], ignore_index=True)
+        
+        save_dataframe(self.data_sources, self.path, self.layer_name)
+
+        return

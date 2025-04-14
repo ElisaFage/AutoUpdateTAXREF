@@ -59,7 +59,7 @@ class AutoUpdateTAXREFDialog(QtWidgets.QDialog, FORM_CLASS):
 
         all_taxon_titles = [taxon.title for taxon in TAXONS]
         self.taxon_titles = taxon_titles if taxon_titles != None else all_taxon_titles
-        self.selected_taxons = set(taxon_titles)   # Contient les taxons selectionnés
+        self.selected_taxons = set(self.taxon_titles)   # Contient les taxons selectionnés
 
         self.status_names = status_names
         self.selected_statuses = set(status_names) # Contient les statuts sélectionnés
@@ -70,26 +70,7 @@ class AutoUpdateTAXREFDialog(QtWidgets.QDialog, FORM_CLASS):
         if taxon_titles == None :
             self.update_taxon_choice_label = QLabel("Quel(s) taxon(s) doivent être mis à jour ?")
             layout.addWidget(self.update_taxon_choice_label)
-
-            # Création d'une zone de défilement pour les cases à cocher pour les taxons
-            self.taxon_checkbox_scroll_area = QScrollArea()
-            self.taxon_checkbox_scroll_area.setWidgetResizable(True)
-            taxon_checkbox_container = QWidget()
-            taxon_checkbox_layout = QGridLayout()
-
-            # Stocker les QCheckBox et leurs noms associés
-            self.taxon_checkboxes = {}
-            if status_names:
-                for i, taxon in enumerate(taxon_titles):
-                    taxon_checkbox = QCheckBox(taxon)
-                    taxon_checkbox.setChecked(True)  # Coché par défaut
-                    taxon_checkbox.stateChanged.connect(self.on_taxon_checkbox_changed)
-                    self.taxon_checkboxes[taxon_checkbox] = taxon
-                    taxon_checkbox_layout.addWidget(taxon_checkbox, i // 2, i % 2)  # Deux colonnes
-
-            taxon_checkbox_container.setLayout(taxon_checkbox_layout)
-            self.taxon_checkbox_scroll_area.setWidget(taxon_checkbox_container)
-            layout.addWidget(self.taxon_checkbox_scroll_area)
+            self.set_taxon_checkboxes(status_names, all_taxon_titles, layout)
 
         # Ajout de la question initiale avec deux choix
         self.update_choice_label = QLabel("Que souhaitez-vous mettre à jour ?")
@@ -116,6 +97,45 @@ class AutoUpdateTAXREFDialog(QtWidgets.QDialog, FORM_CLASS):
         layout.addWidget(description_label)
 
         # Création d'une zone de défilement pour les cases à cocher pour les statuts
+        self.set_status_checkboxes(status_names, layout)
+
+        # Ajout d'une ligne de boutons "Ok" et "Annuler"
+        self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self)
+        self.button_box.accepted.connect(self.accept)  # Ferme la fenêtre avec "Ok"
+        self.button_box.rejected.connect(self.reject)  # Ferme la fenêtre avec "Annuler"
+        layout.addWidget(self.button_box)
+
+        # Définir ce layout comme layout principal
+        self.setLayout(layout)
+
+        # Appliquer l'état initial des cases à cocher (activées ou non)
+        self.update_checkboxes_state()
+
+    def set_taxon_checkboxes(self, status_names, all_taxon_titles, layout: QVBoxLayout):
+        # Création d'une zone de défilement pour les cases à cocher pour les taxons
+        self.taxon_checkbox_scroll_area = QScrollArea()
+        self.taxon_checkbox_scroll_area.setWidgetResizable(True)
+        taxon_checkbox_container = QWidget()
+        taxon_checkbox_layout = QGridLayout()
+
+        # Stocker les QCheckBox et leurs noms associés
+        self.taxon_checkboxes = {}
+        if status_names:
+            for i, taxon in enumerate(all_taxon_titles):
+                taxon_checkbox = QCheckBox(taxon)
+                taxon_checkbox.setChecked(True)  # Coché par défaut
+                taxon_checkbox.stateChanged.connect(self.on_taxon_checkbox_changed)
+                self.taxon_checkboxes[taxon_checkbox] = taxon
+                taxon_checkbox_layout.addWidget(taxon_checkbox, i // 2, i % 2)  # Deux colonnes
+
+        taxon_checkbox_container.setLayout(taxon_checkbox_layout)
+        self.taxon_checkbox_scroll_area.setWidget(taxon_checkbox_container)
+        layout.addWidget(self.taxon_checkbox_scroll_area)
+
+    def set_status_checkboxes(self,
+                              status_names: list,
+                              layout: QVBoxLayout):
+        # Création d'une zone de défilement pour les cases à cocher pour les statuts
         self.status_checkbox_scroll_area = QScrollArea()
         self.status_checkbox_scroll_area.setWidgetResizable(True)
         status_checkbox_container = QWidget()
@@ -134,18 +154,6 @@ class AutoUpdateTAXREFDialog(QtWidgets.QDialog, FORM_CLASS):
         status_checkbox_container.setLayout(status_checkbox_layout)
         self.status_checkbox_scroll_area.setWidget(status_checkbox_container)
         layout.addWidget(self.status_checkbox_scroll_area)
-
-        # Ajout d'une ligne de boutons "Ok" et "Annuler"
-        self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self)
-        self.button_box.accepted.connect(self.accept)  # Ferme la fenêtre avec "Ok"
-        self.button_box.rejected.connect(self.reject)  # Ferme la fenêtre avec "Annuler"
-        layout.addWidget(self.button_box)
-
-        # Définir ce layout comme layout principal
-        self.setLayout(layout)
-
-        # Appliquer l'état initial des cases à cocher (activées ou non)
-        self.update_checkboxes_state()
 
     def reset_dialog(self):
         """Réinitialise la fenêtre de dialogue à son état initial."""
@@ -169,7 +177,6 @@ class AutoUpdateTAXREFDialog(QtWidgets.QDialog, FORM_CLASS):
         # Vider la sélection des statuts
         self.selected_statuses.clear()
         self.selected_statuses = set(self.status_names)
-
 
     def on_taxon_checkbox_changed(self, state):
         taxon_checkbox = self.sender()
@@ -195,11 +202,11 @@ class AutoUpdateTAXREFDialog(QtWidgets.QDialog, FORM_CLASS):
         """Active ou désactive les cases à cocher en fonction du choix sélectionné."""
         if self.radio_taxref_all.isChecked():
             # Si "TAXREF et tous les statuts" est sélectionné, cocher toutes les cases et désactiver les interactions
-            for checkbox in self.checkboxes:
+            for checkbox in self.status_checkboxes:
                 checkbox.setChecked(True)
                 checkbox.setEnabled(False)
         elif self.radio_status_only.isChecked():
             # Si "Seulement des statuts" est sélectionné, permettre de cliquer sur les cases
-            for checkbox in self.checkboxes:
+            for checkbox in self.status_checkboxes:
                 checkbox.setEnabled(True)
 

@@ -10,7 +10,7 @@ import geopandas as gpd
 from PyQt5.QtCore import QThread, pyqtSignal
 
 from .UpdateTAXREF import get_download_url, tri_taxon_taxref
-from .UpdateStatus import run_download_status, save_global_status, save_new_sources
+from .UpdateStatus import run_download_status, save_global_status
 from .utils import print_debug_info
 from .taxongroupe import TaxonGroupe
 
@@ -49,7 +49,7 @@ class GetURLThread(QThread):
         # Émettre le signal 'finished' avec l'URL obtenue
         self.finished.emit(url)
 
-class DownloadThread(QThread):
+class DownloadTaxrefThread(QThread):
     """
     Classe qui gère le téléchargement d'un fichier à partir d'une URL en arrière-plan.
 
@@ -157,9 +157,11 @@ class SaveTaxrefThread(QThread):
         The `finished` signal is emitted once the saving process is complete.
         """
         # Process the downloaded data and save it to the specified path
-        tri_taxon_taxref(self.temp_zip_path, self.version,
-                            self.taxons,
-                            self.save_path, self.synonyme)
+        tri_taxon_taxref(self.temp_zip_path,
+                         self.version,
+                         self.taxons,
+                         self.save_path,
+                         self.synonyme)
         # Emit the 'finished' signal to notify that the process is complete
         self.finished.emit()
 
@@ -341,52 +343,3 @@ class GetStatusThread(QThread):
         
         # Termine le thread de force
         self.terminate()
-
-class SaveSourcesThread(QThread):
-    """
-    Thread pour sauvegarder les nouvelles sources dans un fichier.
-
-    Cette classe étend `QThread` et est utilisée pour effectuer la sauvegarde des nouvelles sources
-    dans un fichier spécifique en arrière-plan, sans bloquer l'interface utilisateur. Une fois la sauvegarde
-    terminée, le signal `finished` est émis.
-
-    Attributes:
-        finished (pyqtSignal): Signal émis lorsque la sauvegarde est terminée.
-        path (str): Le chemin où les nouvelles sources doivent être sauvegardées.
-        newVer (str): La nouvelle version à associer aux sources.
-        newSources (pd.DataFrame): Le DataFrame contenant les nouvelles sources à sauvegarder.
-    """
-
-    finished = pyqtSignal()
-
-    def __init__(self,
-                 path: str,
-                 new_version: int,
-                 new_sources: pd.DataFrame):
-        """
-        Initialise un thread pour la sauvegarde des nouvelles sources.
-
-        Args:
-            path (str): Le chemin où les nouvelles sources doivent être sauvegardées.
-            newVer (str): La nouvelle version à associer aux sources.
-            newSources (pd.DataFrame): Le DataFrame contenant les nouvelles sources à sauvegarder.
-        """
-
-        super().__init__()
-        self.path = path
-        self.new_version = new_version
-        self.new_sources = new_sources
-
-    def run(self):
-        """
-        Exécute la sauvegarde des nouvelles sources dans un fichier.
-
-        Cette méthode est exécutée dans un thread séparé et appelle la fonction `save_new_sources` 
-        pour effectuer la sauvegarde. Une fois terminée, le signal `finished` est émis pour signaler 
-        la fin du processus.
-        """
-
-        # Sauvegarde les nouvelles sources dans le fichier spécifié
-        save_new_sources(self.path, self.new_version, self.new_sources)
-        # Émet le signal lorsque la sauvegarde est terminée
-        self.finished.emit()

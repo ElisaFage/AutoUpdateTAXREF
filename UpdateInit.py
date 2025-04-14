@@ -1,14 +1,15 @@
 from qgis.core import QgsMessageLog, Qgis
-from PyQt5.QtWidgets import QDialog, QFileDialog
+from PyQt5.QtWidgets import QDialog
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 
 import pandas as pd
 from typing import List
 
-from .GetVersions import recup_my_version, recup_current_version
+from .GetVersions import VersionManager
 
-from .UpdateSearchStatus import check_update_status
+from .UpdateSearchStatus import SourcesManager
 from .UpdateStatusDialog import UpdateStatusDialog, ask_update, ask_save_excel
+from .utils import print_debug_info
 
 class UpdateInitThread(QThread):
     """
@@ -23,22 +24,23 @@ class UpdateInitThread(QThread):
     finished = pyqtSignal(
         bool,         # do_update
         str,          # path
-        List[str],    # local_status_ids
-        List[str],    # taxon_titles
+        list,         # local_status_ids
+        list,         # taxon_titles
         int,          # version
         bool,         # synonyme
         bool,         # new_version
         bool,         # new_status
         pd.DataFrame, # new_sources
         bool,         # save_excel
-        str,          # folder
-        int           # debug
-    )
+        str)          # folder
 
     def __init__(self,
                  path: str,
+                 version_manager: VersionManager,
+                 source_manager: SourcesManager, 
                  taxon_titles: List[str],
-                 status_ids: List[str]):
+                 status_ids: List[str],
+                 debug: int=0):
         """
         Initialise l'instance de la classe UpdateInitThread.
 
@@ -49,7 +51,9 @@ class UpdateInitThread(QThread):
         """
         super().__init__()
         self.path = path
-        self.debug = 1
+        self.versions = version_manager
+        self.sources = source_manager
+        self.debug = debug
 
         self.taxon_titles = taxon_titles
 
@@ -69,32 +73,25 @@ class UpdateInitThread(QThread):
         Propose à l'utilisateur de mettre à jour si nécessaire et émet les résultats.
         """
         # Récupération de la version actuelle locale
-        self.my_version = recup_my_version(self.path)
-        if self.debug > 0:
-            QgsMessageLog.logMessage(
-                f"Ma version: {self.my_version}", "AutoUpdateTAXREF", level=Qgis.Info
-            )
+        self.versions.set_data_version()
 
         # Récupération de la version actuelle en ligne
-        self.current_version = recup_current_version()
-        if self.debug > 0:
-            QgsMessageLog.logMessage(
-                f"Dernière version: {self.current_version}", "AutoUpdateTAXREF", level=Qgis.Info
-            )
+        self.versions.set_current_version()
 
         # Vérification si une mise à jour de la version est nécessaire
-        if self.my_version != self.current_version:
+        if self.versions.data_version != self.versions.current_version :
             self.new_version = True
-            self.do_update = ask_update(self.current_version)
+            self.sources.set_new_version(self.new_version)
+            self.do_update = ask_update(self.versions.current_version)
             if self.do_update:
                 self.ask_save_excel = ask_save_excel
                 self.save_excel, self.folder = self.ask_save_excel()
             print(self.do_update)
         else:
             # Vérification s'il existe de nouvelles sources nécessitant une mise à jour des statuts
-            self.new_sources = check_update_status(self.path)
-            if not self.new_sources.empty:
-                text_lines = self.new_sources["fullCitation"].to_list()
+            self.sources.check_update_status()
+            if not self.sources.new_sources.empty:
+                text_lines = self.sources.new_sources["fullCitation"].to_list()
                 self.status_dialog = UpdateStatusDialog(text_lines, self.status_ids)
                 self.dialog_result = self.status_dialog.exec_()
 
@@ -127,7 +124,5 @@ class UpdateInitThread(QThread):
             self.new_status,
             self.new_sources,
             self.save_excel,
-            self.folder,
-            self.debug,
-        )
+            self.folder)
     

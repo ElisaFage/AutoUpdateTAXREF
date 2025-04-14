@@ -20,7 +20,7 @@ FONGE = {"title": "Fonge",
          "famille": [""]}
 
 # Faune
-AMPHIBIENS = {"title": "Amphibiens",
+AMPHIBIENS = {"title": "Amphibien",
          "regne": "Animalia",
          "ordre": [""],
          "groupe1": ["Chordés"],
@@ -28,7 +28,7 @@ AMPHIBIENS = {"title": "Amphibiens",
          "groupe3": [""],
          "famille": [""]}
 
-REPTILES = {"title": "Reptiles",
+REPTILES = {"title": "Reptile",
          "regne": "Animalia",
          "ordre": [""],
          "groupe1": ["Chordés"],
@@ -36,7 +36,7 @@ REPTILES = {"title": "Reptiles",
          "groupe3": [""],
          "famille": [""]}
 
-OISEAUX = {"title": "Oiseaux",
+OISEAUX = {"title": "Avifaune",
          "regne": "Animalia",
          "ordre": [""],
          "groupe1": ["Chordés"],
@@ -44,7 +44,7 @@ OISEAUX = {"title": "Oiseaux",
          "groupe3": [""],
          "famille": [""]}
 
-MAMMIFERES = {"title": "Mammifères",
+MAMMIFERES = {"title": "Mammifere",
          "regne": "Animalia",
          "ordre": ["Afrosoricida", "Carnivora", "Cetartiodactyla", "Diprotodontia", "Eulipotyphla", "Lagomorpha", "Perissodactyla", "Proboscidea", "Rodentia"],
          "groupe1": ["Chordés"],
@@ -52,15 +52,15 @@ MAMMIFERES = {"title": "Mammifères",
          "groupe3": [""],
          "famille": [""]}
 
-CHIROPTERES = {"title": "Mammifères",
+CHIROPTERES = {"title": "Chiroptere",
          "regne": "Animalia",
-         "Ordre": ["Chiroptera"],
+         "ordre": ["Chiroptera"],
          "groupe1": ["Chordés"],
          "groupe2": ["Mammifères"],
          "groupe3": ["Autres"],
          "famille": [""]}
 
-LEPIDOPTERES = {"title": "Lépidoptères",
+LEPIDOPTERES = {"title": "Lepidoptere",
          "regne": "Animalia",
          "ordre": [""],
          "groupe1": ["Arthropodes"],
@@ -69,7 +69,7 @@ LEPIDOPTERES = {"title": "Lépidoptères",
          "famille": ["Papilionidae", "Pieridae", "Nymphalidae", "Satyrinae",
             "Lycaenidae", "Hesperiidae", "Zygaenidae"]}
 
-ODONATES = {"title": "Odonates",
+ODONATES = {"title": "Odonate",
          "regne": "Animalia",
          "ordre": [""],
          "groupe1": ["Arthropodes"],
@@ -77,7 +77,7 @@ ODONATES = {"title": "Odonates",
          "groupe3": ["Odonates"],
          "famille": [""]}
 
-COLEOPTERES = {"title": "Coléoptères",
+COLEOPTERES = {"title": "Coleoptere",
          "regne": "Animalia",
          "ordre": [""],
          "groupe1": ["Arthropodes"],
@@ -102,7 +102,7 @@ COLEOPTERES = {"title": "Coléoptères",
             "Aderidae", "Scraptiidae", "Cerambycidae", "Chrysomelidae",
             "Anthribidae", "Brentidae", "Dryophthoridae", "Curculionidae"]}
 
-ORTHOPTERES = {"title": "Orthoptères",
+ORTHOPTERES = {"title": "Orthoptere",
          "regne": "Animalia",
          "ordre": [""],
          "groupe1": ["Arthropodes"],
@@ -113,7 +113,7 @@ ORTHOPTERES = {"title": "Orthoptères",
             "Pyrgomorphidae", "Rhaphidophoridae", "Tetrigidae",
             "Tettigoniidae", "Tridactylidae", "Trigonidiidae"]}
 
-EPHEMERES = {"title": "Éphémères",
+EPHEMERES = {"title": "Ephemere",
          "regne": "Animalia",
          "ordre" : ["Ephemeroptera"],
          "groupe1": ["Arthropodes"],
@@ -121,7 +121,7 @@ EPHEMERES = {"title": "Éphémères",
          "groupe3": ["Autres"],
          "famille": [""]}
 
-ARAIGNEES = {"title": "Araignées",
+ARAIGNEES = {"title": "Araignee",
          "regne": "Animalia",
          "ordre": [""],
          "groupe1": ["Arthropodes"],
@@ -129,7 +129,7 @@ ARAIGNEES = {"title": "Araignées",
          "groupe3": ["Araignées", "Opilions", "Pseudoscorpions", "Scorpions"],
          "famille": [""]}
 
-MOLLUSQUES = {"title": "Mollusques",
+MOLLUSQUES = {"title": "Mollusque",
          "regne": "Animalia",
          "ordre": [""],
          "groupe1": ["Mollusques"],
@@ -137,7 +137,7 @@ MOLLUSQUES = {"title": "Mollusques",
          "groupe3": [""],
          "famille": [""]}
 
-CRUSTACES = {"title": "Crustacés",
+CRUSTACES = {"title": "Crustace",
          "regne": "Animalia",
          "ordre": [""],
          "groupe1": ["Arthropodes"],
@@ -145,7 +145,7 @@ CRUSTACES = {"title": "Crustacés",
          "groupe3": [""],
          "famille": [""]}
 
-POISSONS = {"title": "Poissons",
+POISSONS = {"title": "Poisson",
          "regne": "Animalia",
          "ordre": [""],
          "groupe1": ["Chordés"],
@@ -245,3 +245,6 @@ class TaxonGroupe():
 TAXONS = [FLORE, FONGE, AMPHIBIENS, REPTILES, OISEAUX, MAMMIFERES, CHIROPTERES, LEPIDOPTERES, ODONATES, COLEOPTERES, ORTHOPTERES, EPHEMERES, ARAIGNEES, MOLLUSQUES, CRUSTACES, POISSONS]
 
 TAXONS = [TaxonGroupe(**taxon) for taxon in TAXONS]
+TAXON_TITLES = [taxon.title for taxon in TAXONS]
+
+STATUS_IDS = ["DH", "DO", "PN", "PR", "PD", "LRN", "LRR", "PNA", "PAPNAT", "ZDET", "REGLLUTTE"]

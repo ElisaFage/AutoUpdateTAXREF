@@ -21,38 +21,33 @@
  *                                                                         *
  ***************************************************************************/
 """
-#from .UpdateSearch import UpdateSearch
-
+# Import les classes de qgis et  qgis.PyQt
 from qgis.core import QgsMessageLog, Qgis, QgsProject
-from PyQt5.QtWidgets import QDialog, QFileDialog
-from PyQt5.QtCore import QVariant, QObject
-
 from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction
 
 # Initialisation des ressources Qt depuis le fichier resources.py
 from .resources import *
-# Import du code pour la boÃ®te de dialogue du plugin
-from .AutoUpdateTAXREF_dialog import AutoUpdateTAXREFDialog
+
 import os.path
 import geopandas as gpd
 from typing import List
 
+# Import du code pour la boÃ®te de dialogue du plugin
+from .AutoUpdateTAXREF_dialog import AutoUpdateTAXREFDialog
 from .GetVersions import recup_current_version
-
 from .UpdateSearchStatus import check_update_status
 from .UpdateStatusDialog import ask_save_excel
-
 from .ProgressDownload import DownloadWindow
-
 from .UpdateInit import UpdateInitThread
+from .taxongroupe import STATUS_IDS
+
+from UpdateController import UpdateController
 
 
 class AutoUpdateTAXREF :
     """QGIS Plugin Implementation."""
-
-    status_ids = ["DH", "DO", "PN", "PR", "PD", "LRN", "LRR", "PNA", "PAPNAT", "ZDET", "REGLLUTTE"]
 
     def __init__(self, iface):
         """Constructor.
@@ -204,105 +199,15 @@ class AutoUpdateTAXREF :
 
         # Create the dialog with elements (after translation) and keep reference
         # Only create GUI ONCE in callback, so that it will only load when the plugin is started
-        project_path = os.path.dirname(QgsProject.instance().fileName())
-        data_taxon_titles = self.get_taxon_title_from_data(project_path)
 
-        if self.first_start == True:
-            self.first_start = False
-            self.dlg = AutoUpdateTAXREFDialog(taxon_titles=data_taxon_titles, status_names=self.status_ids)
-
-        # show the dialog
-        self.dlg.reset_dialog()
-        self.dlg.show()
-        # Run the dialog event loop
-        result = self.dlg.exec_()
-        # See if OK was pressed
-        if result:
-            debug=1
-
-            new_version = True if self.dlg.radio_taxref_all.isChecked() else False
-            new_status = True if self.dlg.radio_status_only.isChecked() else False
-            local_taxons_titles = list(self.dlg.selected_taxons) 
-            local_status_ids = list(self.dlg.selected_statuses)
-            if debug > 0 :
-                QgsMessageLog.logMessage(
-                    f"Accepted : \nTAXREF : {new_version} \nStatus : {new_status}, {local_status_ids}",
-                    "AutoUpdateTAXREF", level=Qgis.Info)
-            self.ask_save_excel = ask_save_excel
-            save_excel, folder = self.ask_save_excel()
-            path = os.path.dirname(QgsProject.instance().fileName())
-            current_ver = recup_current_version()
-            new_sources = check_update_status(path)
-
-            self.download_window = DownloadWindow(path,
-                                                  local_status_ids,
-                                                  local_taxons_titles,
-                                                  version=current_ver,
-                                                  synonyme=False,
-                                                  new_version=new_version,
-                                                  new_status=new_status,
-                                                  new_sources=new_sources,
-                                                  save_excel=save_excel,
-                                                  folder=folder,
-                                                  debug=debug)
-            self.download_window.show()
+        self.update_controller.on_bouton(self.first_start)
+        self.first_start = False
 
     def on_project_loaded(self):
-
+        
         project_path = os.path.dirname(QgsProject.instance().fileName())
-        taxon_titles = self.get_taxon_title_from_data(project_path)
+        self.update_controller = UpdateController(
+            project_path=project_path,
+            debug=2)
 
-        if taxon_titles != None :
-            self.update_search(project_path, taxon_titles)
-
-    def get_taxon_title_from_data(self,
-                                  path: str):
-
-        data_path = os.path.join(path, "Données.gpkg")
-
-        if os.path.isfile(data_path) :
-            available_layers = gpd.list_layers(data_path)
-            if available_layers.shape[0] != 0 :
-                taxon_titles = available_layers["Name"].values
-                return taxon_titles
-        
-        return None
-
-    def update_search(self, path:str, taxon_titles: List[str]):
-
-        self.updateInitThread = UpdateInitThread(path, taxon_titles=taxon_titles, status_ids=self.status_ids)
-        self.updateInitThread.finished.connect(self.on_update_search_finished)
-        self.updateInitThread.run()
-
-    def on_update_search_finished(self,
-                                  do_update,
-                                  path,
-                                  local_status_ids,
-                                  taxon_titles,
-                                  version,
-                                  synonyme,
-                                  new_version,
-                                  new_status,
-                                  new_sources,
-                                  save_excel,
-                                  folder,
-                                  debug):
-        
-        if do_update :
-            if debug > 1 :
-                QgsMessageLog.logMessage(f"Les statuts selectionnés sont : {local_status_ids}", "AutoUpdateTAXREF", level=Qgis.Info)
-                QgsMessageLog.logMessage(f"Save excel : {save_excel} et folder excel : {folder}", "AutoUpdateTAXREF", level=Qgis.Info)
-
-            self.download_window = DownloadWindow(path,
-                                                  local_status_ids,
-                                                  taxon_titles = taxon_titles,
-                                                  version = version,
-                                                  synonyme = synonyme,
-                                                  new_version = new_version,
-                                                  new_status = new_status,
-                                                  new_sources = new_sources,
-                                                  save_excel = save_excel,
-                                                  folder = folder,
-                                                  debug = debug)
-            self.download_window.show()
     

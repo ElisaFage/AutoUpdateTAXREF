@@ -9,7 +9,7 @@ from typing import List
 import json
 import zipfile
 
-from .utils import print_debug_info, get_file_save_path
+from .utils import print_debug_info, get_file_save_path, save_dataframe
 from .taxongroupe import TaxonGroupe
 
 # Générer l'URL de téléchargement pour une version donnée
@@ -181,7 +181,7 @@ def tri_taxon_taxref(temp_zip_path:str,
     # Traitement de chaque couche de taxons  
     for taxon in taxons:
     
-        print_debug_info(debug, 1, f"Etape de lecture et de tri de la couche {taxon.title}")
+        print_debug_info(debug, 1, f"Étape de lecture et de tri de la couche {taxon.title}")
             
         # Lire le fichier extrait par morceaux (chunks)
         with open(extracted_file_path, 'r', encoding='utf-8') as file:
@@ -208,14 +208,12 @@ def tri_taxon_taxref(temp_zip_path:str,
             # Supprimer les noms vernaculaires doubles ou vides pour certains taxons
             df_filtre_nom_vern = supprime_nom_vernaculaire(df=df_filtre, layer=taxon.title)
 
-            # Convertir le pandas.DataFrame en geopandas.GeoDataFrame
-            gdf = gpd.GeoDataFrame(df_filtre_nom_vern)
-
             # Définir le CRS (bien que ce ne soit pas nécessaire pour les couches non-géométriques)
             file_save_path = get_file_save_path(save_path, taxon.title)
-            
+
             # Enregistrer dans un GeoPackage
-            gdf.to_file(file_save_path, layer=f"Liste {taxon.title}", driver="GPKG")
+            save_dataframe(df_filtre_nom_vern, file_save_path, f"Liste {taxon.title}")
+
     
     # Supprimer les fichiers temporaire ZIP
     os.remove(temp_zip_path)
