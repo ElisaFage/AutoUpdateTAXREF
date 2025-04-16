@@ -6,20 +6,25 @@ import os
 import requests
 from typing import List, Tuple, Dict
 
-from datetime import date
-
-
-from .UpdateSearchStatus import get_sources_from_year
-from .utils import print_debug_info, get_file_save_path
+from .utils import (print_debug_info, get_file_save_path,
+                    time_decorator, save_dataframe,
+                    load_layer_as_dataframe, list_layers_from_gpkg)
+from .taxongroupe import (TaxonGroupe, OISEAUX)
+from .statustype import (StatusType, STATUS_TYPES,
+                          LUTTE_CONTRE_ESPECES, 
+                          LISTE_ROUGE_NATIONALE, LISTE_ROUGE_REGIONALE,
+                          PROTECTION_DEPARTEMENTALE, PROTECTION_NATIONALE, PROTECTION_REGIONALE,
+                          PLAN_NATIONAL_ACTION, PRIORITE_ACTION_PUBLIQUE_NATIONALE,
+                          DETERMINANT_ZNIEFF, DIRECTIVE_HABITAT, DIRECTIVE_OISEAUX)
 
 # Supprime les lignes non nécessaires dans le pandas dataframe
-def filter_by_cd_ref(df_concat: pd.DataFrame, taxon_titles: List[str], path: str) -> pd.DataFrame:
+def filter_by_cd_ref(df_concat: pd.DataFrame, taxons: List[TaxonGroupe], path: str) -> pd.DataFrame:
     """
     Filtre les données en fonction des références taxonomiques et exclut les enregistrements hors DOM-TOM.
 
     Args:
         df_concat (pd.DataFrame): Le DataFrame concaténé contenant les données taxonomiques à filtrer.
-        taxonTitles (list): Liste des titres des taxons à traiter (ex. "Flore", "Faune").
+        taxonTitles (List[TaxonGroupe]): Liste des titres des taxons à traiter (ex. "Flore", "Faune").
         path (str): Le chemin d'accès au répertoire contenant les fichiers GPKG.
 
     Returns:
@@ -33,27 +38,26 @@ def filter_by_cd_ref(df_concat: pd.DataFrame, taxon_titles: List[str], path: str
     df_concat = df_concat[df_concat['taxon_referenceId'].astype(int) == df_concat["taxon_id"].astype(int)]
     # Charger les fichiers GPKG pour chaque titre une seule fois et les stocker dans un dictionnaire
     
+    file_path = get_file_save_path(path)
     dict_df_out = {}
-    for title in taxon_titles:
+    for taxon in taxons:
         # Définir le chemin du fichier GPKG en fonction du titre du taxon
-        if title == "Flore":
-            file_path = os.path.join(path, f"{title}.gpkg")
-        else:
-            file_path = os.path.join(path, "Faune.gpkg")
         
         # Charger le fichier GPKG dans un DataFrame et stocker dans le dictionnaire
-        df_ref = pd.DataFrame(gpd.read_file(file_path, layer=f"Liste {title}"))
+        df_ref = load_layer_as_dataframe(file_path, f"Liste {taxon.title}")
+        #pd.DataFrame(gpd.read_file(file_path, layer=f"Liste {title}"))
+
         # Filtrer df_concat pour ne conserver que les lignes dont 'taxon_referenceId' est dans 'CD_REF'
         df_out = df_concat[df_concat['taxon_referenceId'].astype(int).isin(df_ref['CD_REF'].astype(int).values)]
         # Exclure les lignes correspondant à des localisations dans les DOM-TOM
         status_no_domtom = df_out[~df_out["locationName"].isin(domtom)]
         # Stocker le DataFrame filtré dans le dictionnaire
-        dict_df_out[title] = status_no_domtom
+        dict_df_out[taxon.title] = status_no_domtom
 
     return dict_df_out
 
 # Extrait un status_code en fonction de 4 conditions
-def extract_status_code(row, statusId: str, currentTaxon: str, oiseauxKeywords: List[str]):
+def extract_status_code(row, status: StatusType, currentTaxon: str, oiseauxKeywords: List[str]):
     """
     Extrait un code de statut basé sur plusieurs conditions et informations provenant de la ligne de données.
 
@@ -70,13 +74,13 @@ def extract_status_code(row, statusId: str, currentTaxon: str, oiseauxKeywords: 
 
     # Condition 1: Ajouter locationName si applicable
     location = row.get("locationName", "")
-    if not ((row.get("locationAdminLevel", "") == "Département") or (statusId in ["ZDET", "REGLLUTTE"])):
+    if not ((row.get("locationAdminLevel", "") == "Département") or (status in [DETERMINANT_ZNIEFF, LUTTE_CONTRE_ESPECES])):
         # Si ce n'est pas un département ou un statut particulier, ne pas inclure locationName
         location = ""
 
     # Condition 2 : Ajouter mots-clés de self.oiseauxKeywords s'ils sont dans statusRemarks
     keywords = ""
-    if ("Oiseaux" in currentTaxon) and (statusId == "LRN"):
+    if (OISEAUX.title in currentTaxon) and (status == LISTE_ROUGE_NATIONALE):
         status_remarks = row.get("statusRemarks", "")
         if status_remarks:
             # Recherche de mots-clés d'oiseaux dans les remarques de statut
@@ -92,9 +96,16 @@ def extract_status_code(row, statusId: str, currentTaxon: str, oiseauxKeywords: 
             annex_article = match.group(1)
             
     # Condition 4 : Ajouter statusCode sauf si self.statusId == "ZDET"
-    if not (statusId in ("ZDET", "DO", "DH", "PN", "PR", "PD", "PAPNAT", "PNA")) :
+    if not (status in (DETERMINANT_ZNIEFF,
+                       DIRECTIVE_OISEAUX,
+                       DIRECTIVE_HABITAT,
+                       PROTECTION_NATIONALE,
+                       PROTECTION_REGIONALE,
+                       PROTECTION_DEPARTEMENTALE,
+                       PRIORITE_ACTION_PUBLIQUE_NATIONALE,
+                       PLAN_NATIONAL_ACTION)) :
         status_code = row.get("statusCode", "")
-    elif statusId in ("PAPNAT", "PNA") :
+    elif status in (PRIORITE_ACTION_PUBLIQUE_NATIONALE, PLAN_NATIONAL_ACTION) :
         # Si c'est PAPNAT ou PNA, utiliser statusName comme statusCode
         status_code = status_name
     else :
@@ -106,7 +117,7 @@ def extract_status_code(row, statusId: str, currentTaxon: str, oiseauxKeywords: 
     return result if result else "No Data"
 
 def reorganize_columns_and_codes(status_data_in: pd.DataFrame,
-                                 status_id: str,
+                                 status: StatusType,
                                  taxon_title: str,
                                  oiseaux_keywords: List[str])->pd.DataFrame:
     
@@ -142,15 +153,15 @@ def reorganize_columns_and_codes(status_data_in: pd.DataFrame,
     # Dictionaire pour renommer les colonnes 
     rename_dict = {
         "taxon_referenceId": "CD_REF",
-        "statusCode": status_id,
-        "source": f"source_{status_id}",
-        "sourceId": f"sourceId_{status_id}"}
+        "statusCode": status.type_id,
+        "source": f"source_{status.type_id}",
+        "sourceId": f"sourceId_{status.type_id}"}
     
     # Suppréssion des colonnes inutiles
     status_column_reduced = status_data_in[columns_to_keep]
 
     # Réccupération des status_code pour la colonne statusCode
-    newlist = status_column_reduced.apply(lambda x: extract_status_code(x, status_id, taxon_title, oiseaux_keywords), axis=1)
+    newlist = status_column_reduced.apply(lambda x: extract_status_code(x, status, taxon_title, oiseaux_keywords), axis=1)
     status_column_reduced.loc[:, "statusCode"] = newlist
 
     # Renommer les colonnes
@@ -188,7 +199,7 @@ def filter_by_keyword(lrn_string: str, keyword: str)->str:
 def do_save_excel(save_excel: bool,
                   folder_excel:str,
                   status_data: pd.DataFrame,
-                  status_id:str,
+                  status: StatusType,
                   taxon_title: str,
                   debug: int=0)->None:
 
@@ -225,7 +236,7 @@ def do_save_excel(save_excel: bool,
         print_debug_info(debug, 1, f"Sauve {locName} en CSV")
 
         condition_location_name = status_data["locationName"]==locName
-        filename = f'{locName.title().replace(" ", "")}_{status_id}_{taxon_title}.csv'
+        filename = f'{locName.title().replace(" ", "")}_{status.type_id}_{taxon_title}.csv'
         csv_path = os.path.join(folder_excel, filename)
 
         # Fusion avec l'ancien fichier s'il existe
@@ -242,7 +253,7 @@ def do_save_excel(save_excel: bool,
 def generate_status_by_level(df: pd.DataFrame, level_name: str,
                              region_filter_func,
                              lambdafunc_dict: dict,
-                             regions: dict, statusId: str)->List[pd.DataFrame]:
+                             regions: dict, status: StatusType)->List[pd.DataFrame]:
     """
     Génère un statut agrégé par niveau (Région ou autre niveau administratifs) en fonction de `statusId`.
 
@@ -252,7 +263,7 @@ def generate_status_by_level(df: pd.DataFrame, level_name: str,
         region_filter_func (function): Une fonction permettant de filtrer les régions à traiter.
         lambdafunc_dict (dict): Un dictionnaire de fonctions d'agrégation à appliquer sur les données.
         regions (dict): Dictionnaire de régions à traiter.
-        statusId (str): L'ID du statut qui déterminera la logique de traitement.
+        statusId (StatusType): L'ID du statut qui déterminera la logique de traitement.
         taxonTitle (str): Le titre du taxon, utilisé pour des traitements spécifiques si nécessaire.
 
     Returns:
@@ -260,9 +271,10 @@ def generate_status_by_level(df: pd.DataFrame, level_name: str,
     """
 
     result = []
+    status_nationaux = [status_type for status_type in STATUS_TYPES if status_type.is_national()]
 
     # Vérification si le statusId n'appartient pas aux statuts particuliers
-    if statusId not in ("DH", "DO", "LRN", "PN", "PNA", "PAPNAT"):
+    if status not in status_nationaux:
         for region in regions:
             # Appliquer le filtre avant d'effectuer des transformations
             filtered_df = df[region_filter_func(region)]
@@ -303,14 +315,15 @@ def generate_status_by_level(df: pd.DataFrame, level_name: str,
     return result
 
 # Fonction pour créer les fonctions d'aggrégation
-def definir_agg_function(status_id: str, status_data: pd.DataFrame)->Tuple[pd.DataFrame, Dict[str, str]] :
+def definir_agg_function(status: StatusType,
+                         status_data: pd.DataFrame)->Tuple[pd.DataFrame, Dict[str, str]] :
     """
     Définit un dictionnaire de fonctions d'agrégation pour concaténer les colonnes 
     liées à un statut donné, en les séparant par un point-virgule.
 
     Parameters
     ----------
-    status_id : str
+    status : StatusType
         L'identifiant du statut (par exemple "LR", "REGLLUTTE", etc.).
     status_data : pd.DataFrame
         Le DataFrame contenant les colonnes à concaténer.
@@ -324,7 +337,7 @@ def definir_agg_function(status_id: str, status_data: pd.DataFrame)->Tuple[pd.Da
     """
 
     # Colonnes à concaténer lors de l'agrégation
-    columns_to_combine = [status_id, f"source_{status_id}", f"sourceId_{status_id}"]
+    columns_to_combine = [status.type_id, f"source_{status.type_id}", f"sourceId_{status.type_id}"]
     
     # On s'assure que ces colonnes sont bien des chaînes de caractères
     for col in columns_to_combine :
@@ -336,7 +349,7 @@ def definir_agg_function(status_id: str, status_data: pd.DataFrame)->Tuple[pd.Da
     return lambdafunc_dict, status_data
 
 # Fonction pour appliquer le rangement en fonction des localisation
-def reorganize_on_admin_level(status_id: str, status_data_in: pd.DataFrame):
+def reorganize_on_admin_level(status: StatusType, status_data_in: pd.DataFrame):
     """
     Réorganise les données de statut par niveau administratif (État, région, département, etc.)
     en les agrégeant selon des règles spécifiques aux anciennes et nouvelles régions.
@@ -382,7 +395,7 @@ def reorganize_on_admin_level(status_id: str, status_data_in: pd.DataFrame):
                         "Provence-Alpes-Côte d'Azur":["Provence-Alpes-Côte-d'Azur", "Alpes-de-Haute-Provence", "Hautes-Alpes", "Alpes-Maritimes", "Bouches-du-Rhône", "Var", "Vaucluse"]}
 
     # Définir les fonctions d'agrégation pour les groupes
-    lambdafunc_dict, status_data_as_str = definir_agg_function(status_id, status_data_in)
+    lambdafunc_dict, status_data_as_str = definir_agg_function(status, status_data_in)
 
     status_array_dict = {}
     for adminLevel in adminLevels :
@@ -392,7 +405,7 @@ def reorganize_on_admin_level(status_id: str, status_data_in: pd.DataFrame):
             adminLevel,
             lambda region: (status_data_as_str["locationName"].isin(["France", "France métropolitaine", region] + regions[region])) & 
                 (status_data_as_str["locationAdminLevel"]==adminLevel),
-            lambdafunc_dict, regions, status_id)
+            lambdafunc_dict, regions, status)
 
     # Concaténer tous les DataFrames en un seul
     status_data_out = pd.concat([df for dfs in status_array_dict.values() for df in dfs], ignore_index=True)
@@ -400,7 +413,7 @@ def reorganize_on_admin_level(status_id: str, status_data_in: pd.DataFrame):
     return status_data_out
 
 # Modifie les status pour les Oiseaux et les statuts REGLLUTTE
-def modifier_statuts_specifiques(status_id: str,
+def modifier_statuts_specifiques(status: StatusType,
                                  taxon_title: str,
                                  status_data_in: pd.DataFrame,
                                  oiseaux_keywords: list)->pd.DataFrame:
@@ -425,14 +438,14 @@ def modifier_statuts_specifiques(status_id: str,
     """
 
     # Créer des colonnes spécifiques pour les oiseaux (Nicheur, Hivernant, Visiteur)
-    if (status_id == "LRN") and ("Oiseaux" in taxon_title) :
+    if (status == LISTE_ROUGE_NATIONALE) and (OISEAUX.title in taxon_title) :
         for keyword in oiseaux_keywords:
-            col_name = f"{status_id} - {keyword}"
-            status_data_in[col_name] = status_data_in["LRN"].apply(lambda x: filter_by_keyword(x, keyword))
+            col_name = f"{status.type_id} - {keyword}"
+            status_data_in[col_name] = status_data_in[LISTE_ROUGE_NATIONALE.type_id].apply(lambda x: filter_by_keyword(x, keyword))
     
     # Modifier la colonne des status REGLLUTTE
-    elif (status_id == "REGLLUTTE") :
-        status_data_in[status_id] = status_data_in[status_id].apply(lambda x: x.replace(" : ", " - "))
+    elif (status == LUTTE_CONTRE_ESPECES) :
+        status_data_in[status.type_id] = status_data_in[status.type_id].apply(lambda x: x.replace(" : ", " - "))
 
     # Passer les élements de la colonne CD_REF en string plutot qu'en int
     status_data_in['CD_REF'] = status_data_in['CD_REF'].astype(int)
@@ -440,7 +453,8 @@ def modifier_statuts_specifiques(status_id: str,
     return status_data_in
 
 # Fait le status array a sauvegarder temporairement
-def make_status_array(status_id: str,
+@time_decorator
+def make_status_array(status: StatusType,
                     taxon_title: str, status_array_in: pd.DataFrame,
                     save_excel: bool, folder_excel: str,
                     debug: int=0):
@@ -462,14 +476,14 @@ def make_status_array(status_id: str,
         pd.DataFrame: Un DataFrame contenant les données agrégées pour le statut et le taxon donnés.
     """
 
-    print_debug_info(debug, 1, f"Pour {status_id} au taxon {taxon_title}, début de make_status_array")
+    print_debug_info(debug, 1, f"Pour {status.type_id} au taxon {taxon_title}, début de make_status_array")
 
     # Liste des mots-clés utilisés pour les oiseaux
     oiseaux_keywords = ["Nicheur", "Hivernant", "Visiteur"]
 
     # Preprocess des statuts pour organiser les colonnes et avoir les status code avant tri
     status_data_preprocessed = reorganize_columns_and_codes(status_array_in,
-                                                            status_id,
+                                                            status.type_id,
                                                             taxon_title,
                                                             oiseaux_keywords)
 
@@ -477,26 +491,28 @@ def make_status_array(status_id: str,
     do_save_excel(save_excel,
                   folder_excel,
                   status_data_preprocessed,
-                  status_id,
+                  status,
                   taxon_title,
                   debug=debug)
 
 
     # Organise les status dans un seul pandas.DataFrame en fonction des localisations et type de statuts
-    status_local_organized = reorganize_on_admin_level(status_id, status_data_preprocessed)
+    status_local_organized = reorganize_on_admin_level(status, status_data_preprocessed)
 
     # Ajoute des modification spécifique à certains statuts
-    status_array_out = modifier_statuts_specifiques(status_id,
+    status_array_out = modifier_statuts_specifiques(status,
                                                     taxon_title,
                                                     status_local_organized,
                                                     oiseaux_keywords)
 
-    print_debug_info(debug, 1, f"Pour {status_id} au taxon {taxon_title}, fin de make_status_array")
+    print_debug_info(debug, 1, f"Pour {status.type_id} au taxon {taxon_title}, fin de make_status_array")
 
     return status_array_out
 
-def download_status(status_id: str,
-                 taxon_titles: List[str],
+#
+@time_decorator
+def download_status(status: StatusType,
+                 taxons: List[TaxonGroupe],
                  path: str,
                  save_excel: bool,
                  folder_excel: str,
@@ -529,25 +545,26 @@ def download_status(status_id: str,
     """
     
     # Initialiser un dictionnaire vide pour stocker les tableaux par taxon
-    dict_make_array_out = {title: [] for title in taxon_titles}
+    dict_make_array_out = {taxon.title: [] for taxon in taxons}
 
     # Préparer l'URL pour la pagination
-    url_prefix = f"https://taxref.mnhn.fr/api/status/findByType/{status_id}?page="
+    url_prefix = f"https://taxref.mnhn.fr/api/status/findByType/{status.type_id}?page="
     url_suffix = "&size=10000"
 
+    # Initialisé à 1 pour commencer la boucle
     i = 1
-    total_pages = 1# Initialisé à 1 pour commencer la boucle
+    total_pages = 1
 
     while i <= total_pages:
         url = url_prefix + str(i) + url_suffix
         
-        print_debug_info(debug, 1, f"Pour {status_id}, début du téléchargement page {i}")
+        print_debug_info(debug, 1, f"Pour {status.type_id}, début du téléchargement page {i}")
 
         # Requête HTTP
         response = requests.get(url)
         data_json = response.json()
 
-        print_debug_info(debug, 1, f"Pour {status_id}, fin du téléchargement page {i}")
+        print_debug_info(debug, 1, f"Pour {status.type_id}, fin du téléchargement page {i}")
 
         # Mettre à jour le nombre total de pages lors de la première itération
         if i == 1:
@@ -556,11 +573,11 @@ def download_status(status_id: str,
         # Extraire la liste des statuts et convertir en DataFrame
         status_list = data_json['_embedded']['status']
         df_page = pd.json_normalize(status_list, sep='_')
-        df_page["statusId"] = status_id
+        df_page["statusId"] = status.type_id
         df_page["taxon_referenceId"] = df_page["taxon_referenceId"].astype(str)
 
         # Filtrer les statuts en fonction des taxons définis par CD_REF
-        dict_df_filter = filter_by_cd_ref(df_page, taxon_titles, path)
+        dict_df_filter = filter_by_cd_ref(df_page, taxons, path)
 
         # Générer les tableaux par taxon si des données sont présentes  
         for key in dict_df_filter:
@@ -568,7 +585,7 @@ def download_status(status_id: str,
             if len(dict_df_filter[key]) != 0:
                 dict_make_array_out[key].append(
                     make_status_array(
-                        status_id, key,
+                        status, key,
                         dict_df_filter[key],
                         save_excel,
                         folder_excel,
@@ -580,8 +597,8 @@ def download_status(status_id: str,
     return dict_make_array_out
 
 def save_temp_file_status(dict_make_array_in: Dict[str, pd.DataFrame],
-                          status_id: str,
-                          taxon_titles: str,
+                          status: StatusType,
+                          taxons: List[TaxonGroupe],
                           path: str,
                           debug: int=0):
 
@@ -595,7 +612,7 @@ def save_temp_file_status(dict_make_array_in: Dict[str, pd.DataFrame],
         Dictionnaire contenant des listes de DataFrames pour chaque taxon (résultats de `make_status_array`).
     status_id : str
         Identifiant du statut (ex : "LRN", "REGLLUTTE").
-    taxon_titles : list of str
+    taxons : list of TaxonGroupe
         Liste des noms des taxons à traiter.
     path : str
         Répertoire où enregistrer les fichiers GeoPackage temporaires.
@@ -609,35 +626,36 @@ def save_temp_file_status(dict_make_array_in: Dict[str, pd.DataFrame],
     """
 
     temp_pathes = []
-    for title in taxon_titles:
-        print_debug_info(debug, 1, f"Pour {status_id} au taxon {title}, début de concaténation")
+    for taxon in taxons:
+        print_debug_info(debug, 1, f"Pour {status.type_id} au taxon {taxon.title}, début de concaténation")
 
         # Si on a des DataFrames pour ce taxon, on les concatène
-        if len(dict_make_array_in[title]) != 0:
-            dict_make_array_in[title] = pd.concat(dict_make_array_in[title], ignore_index=True)
+        if len(dict_make_array_in[taxon.title]) != 0:
+            dict_make_array_in[taxon.title] = pd.concat(dict_make_array_in[taxon.title], ignore_index=True)
         else :
             # Sinon, on crée un DataFrame vide avec les colonnes minimales
-            dict_make_array_in[title] = pd.DataFrame({}, columns=["Région", "CD_REF"])
+            dict_make_array_in[taxon.title] = pd.DataFrame({}, columns=["Région", "CD_REF"])
 
         # Conversion en GeoDataFrame (même s'il n'y a pas encore de géométrie)
-        gdf = gpd.GeoDataFrame(dict_make_array_in[title])
+        gdf = gpd.GeoDataFrame(dict_make_array_in[taxon.title])
 
         # Construction du chemin de fichier temporaire
-        temp_path = os.path.join(path, f"{title}_{status_id}.gpkg")
+        temp_path = os.path.join(path, f"{taxon.title}_{status.type_id}.gpkg")
         temp_pathes.append(temp_path)
         
-        print_debug_info(debug, 1, f"Pour {status_id} au taxon {title}, début de sauvegarde")
+        print_debug_info(debug, 1, f"Pour {status.type_id} au taxon {taxon.title}, début de sauvegarde")
         
         # Sauvegarde au format GPKG
         gdf.to_file(temp_path, driver="GPKG")
         
-        print_debug_info(debug, 1, f"Pour {status_id} au taxon {title}, fin de sauvegarde")
+        print_debug_info(debug, 1, f"Pour {status.type_id} au taxon {taxon.title}, fin de sauvegarde")
 
 
     return temp_pathes
 
-def run_download_status(status_id: str,
-                        taxon_titles: List[str],
+@time_decorator
+def run_download_status(status: StatusType,
+                        taxons: List[TaxonGroupe],
                         path: str,
                         save_excel: bool,
                         folder_excel: str,
@@ -653,7 +671,7 @@ def run_download_status(status_id: str,
     ----------
     status_id : str
         Identifiant du statut (par exemple "LRN" ou "REGLLUTTE").
-    taxon_titles : list of str
+    taxons : list of TaxonGroupe
         Liste des taxons à traiter.
     path : str
         Dossier où enregistrer les fichiers générés (GeoPackage et éventuellement Excel).
@@ -671,8 +689,8 @@ def run_download_status(status_id: str,
     """
 
     # Télécharger les données de statu
-    dict_make_array_out = download_status(status_id,
-                                          taxon_titles,
+    dict_make_array_out = download_status(status,
+                                          taxons,
                                           path,
                                           save_excel,
                                           folder_excel,
@@ -680,8 +698,8 @@ def run_download_status(status_id: str,
 
     # Sauvegarder les données sous forme de fichiers GeoPackage temporaires
     temp_pathes = save_temp_file_status(dict_make_array_out,
-                                        status_id,
-                                        taxon_titles,
+                                        status,
+                                        taxons,
                                         path,
                                         debug=debug)
 
@@ -791,7 +809,8 @@ def save_global_status(status_df: pd.DataFrame,
     file_save_path = get_file_save_path(path, taxon_title)
 
     # Liste des couches déjà présentes dans le fichier
-    available_layers = gpd.list_layers(file_save_path)
+    available_layers =  list_layers_from_gpkg(file_save_path)
+    #gpd.list_layers(file_save_path)
 
     # Choix du nom de la couche et configuration spécifique selon le type de sauvegarde
     if save_type == regional_value:
@@ -807,8 +826,9 @@ def save_global_status(status_df: pd.DataFrame,
         raise ValueError(f"save_type should be either \"{national_value}\" or \"{regional_value}\" but is : {save_type}")
     
     # Si une couche existe déjà, on la lit et prépare une fusion avec les nouvelles données
-    if layer_name in available_layers["name"].values:
-        old_file = pd.DataFrame(gpd.read_file(file_save_path, layer=layer_name))
+    if layer_name in available_layers :#["name"].values:
+        old_file = load_layer_as_dataframe(file_save_path, layer_name=layer_name)
+        #pd.DataFrame(gpd.read_file(file_save_path, layer=layer_name))
 
         # Forcer les colonnes clé en chaîne pour éviter les erreurs de jointure
         old_file['CD_REF'] = old_file['CD_REF'].astype(str) 
@@ -823,7 +843,7 @@ def save_global_status(status_df: pd.DataFrame,
         old_file_light = old_file.drop(columns=colonnes_sans_cd_ref+bird_col)
 
         # Colonnes à tester pour la suppression des lignes vides après fusion
-        subset_col_dropna = [col for col in status_merged.columns if col not in col_to_check]
+        subset_col_dropna = [col for col in old_file_light.columns if col not in col_to_check]
         
         # Fusion : priorise les clés communes et conserve les lignes valides
         if save_type == regional_value:
@@ -843,10 +863,9 @@ def save_global_status(status_df: pd.DataFrame,
     # Réorganise les colonnes de manière standard et supprime les doublons
     status_to_save = reorder_columns(status_na_dropped).drop_duplicates()
 
-    print_debug_info(debug, 2, f"Pour {taxon_title} : les colonnes de reresult sont {status_to_save.columns}")
+    print_debug_info(debug, 2, f"Pour {taxon_title} : les colonnes après reordonnancement sont {status_to_save.columns}")
         
     # Convertit le DataFrame en GeoDataFrame et sauvegarde dans le fichier GeoPackage
-    gdf = gpd.GeoDataFrame(status_to_save)
-    gdf.to_file(file_save_path, layer=layer_name, driver="GPKG")
+    save_dataframe(status_to_save, file_save_path, layer_name)
 
     return

@@ -10,7 +10,7 @@ import json
 import zipfile
 
 from .utils import print_debug_info, get_file_save_path, save_dataframe
-from .taxongroupe import TaxonGroupe
+from .taxongroupe import TaxonGroupe, AMPHIBIENS, REPTILES, OISEAUX, MAMMIFERES
 
 # Générer l'URL de téléchargement pour une version donnée
 def get_download_url(version):
@@ -103,7 +103,7 @@ def tri_colonnes(df:pd.DataFrame, version:int)->pd.DataFrame:
     return df
 
 # Supprimer les espèces sans nom vernaculaire et les noms vernaculaires doubles 
-def supprime_nom_vernaculaire(df:pd.DataFrame, layer:str)->pd.DataFrame:
+def supprime_nom_vernaculaire(df:pd.DataFrame, taxon:TaxonGroupe)->pd.DataFrame:
     """
     Supprime les lignes avec des valeurs manquantes dans la colonne 'NOM_VERN' pour certaines couches,
     puis groupe les données par 'NOM_VERN' et conserve uniquement la ligne avec le nom valide le plus court.
@@ -117,10 +117,10 @@ def supprime_nom_vernaculaire(df:pd.DataFrame, layer:str)->pd.DataFrame:
     """
     
     # Définition des couches pour lesquelles le nettoyage des noms vernaculaires s'applique
-    nom_couches = ('Amphibiens', 'Reptiles', 'Oiseaux', 'Mammifères')
+    taxon_specifique = (AMPHIBIENS, REPTILES, OISEAUX, MAMMIFERES)
 
     # Vérifier si la couche est dans la liste des couches définies
-    if layer in nom_couches:
+    if taxon in taxon_specifique:
         # Supprimer les lignes où la colonne 'NOM_VERN' a des valeurs manquantes
         df.dropna(subset=["NOM_VERN"], inplace=True)
         # Grouper par 'NOM_VERN' et appliquer la logique pour sélectionner la ligne avec le nom valide le plus court
@@ -182,7 +182,7 @@ def tri_taxon_taxref(temp_zip_path:str,
     for taxon in taxons:
     
         print_debug_info(debug, 1, f"Étape de lecture et de tri de la couche {taxon.title}")
-            
+        
         # Lire le fichier extrait par morceaux (chunks)
         with open(extracted_file_path, 'r', encoding='utf-8') as file:
             # Lire directement le fichier dans un DataFrame pandas en flux
@@ -206,7 +206,7 @@ def tri_taxon_taxref(temp_zip_path:str,
             df_filtre = pd.concat(filtered_frames, ignore_index=True)
 
             # Supprimer les noms vernaculaires doubles ou vides pour certains taxons
-            df_filtre_nom_vern = supprime_nom_vernaculaire(df=df_filtre, layer=taxon.title)
+            df_filtre_nom_vern = supprime_nom_vernaculaire(df=df_filtre, taxon=taxon)
 
             # Définir le CRS (bien que ce ne soit pas nécessaire pour les couches non-géométriques)
             file_save_path = get_file_save_path(save_path, taxon.title)

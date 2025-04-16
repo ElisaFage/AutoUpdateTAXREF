@@ -7,16 +7,19 @@ from PyQt5.QtWidgets import QDialog, QFileDialog
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 
 # Fonctions pratiques
-from .utils import print_debug_info
+from .utils import (print_debug_info,
+                    list_layers_from_gpkg)
 
 # Models
-from .taxongroupe import TAXONS, TAXON_TITLES, STATUS_IDS
+from .taxongroupe import (TAXONS,
+                          get_taxon_titles, get_taxon_from_titles)
+from .statustype import (STATUS_TYPES, get_status_types_from_ids)
 from .UpdateSearchStatus import SourcesManager
 from .GetVersions import VersionManager
 
 from .AutoUpdateTAXREF_dialog import AutoUpdateTAXREFDialog
 
-from UpdateThreadClasses import (GetURLThread,
+from .UpdateThreadClasses import (GetURLThread,
                                  DownloadTaxrefThread,
                                  SaveTaxrefThread,
                                  GetStatusThread)
@@ -34,20 +37,37 @@ class UpdateController(QThread):
 
     def __init__(self, project_path: str, debug: int=0):
 
+        super().__init__()
+
         self.project_path = project_path
         self.debug = debug
-
-        self.taxon_titles = self.get_taxon_title_from_data(self)
-        self.taxons = [taxon for taxon in TAXONS if taxon.title in self.taxon_titles]
-        self.status_ids = STATUS_IDS
+        
+        # Attributs pour gérer les mises à jour
+        self.do_update = False
+        self.new_version = False
+        self.new_status = False
+        
+        self.local_status_types = STATUS_TYPES
         self.synonyme = False
 
-        self.source_model = SourcesManager(self.project_path, debug=self.debug)
+        self.data_path = os.path.join(self.project_path, "Donnees.gpkg")
+        self.status_path = os.path.join(self.project_path, "Statuts.gpkg")
+        if os.path.isfile(self.data_path) and os.path.isfile(self.status_path):
+            local_taxon_titles = get_taxon_titles(self.data_path)
+            self.local_taxons = get_taxon_from_titles(local_taxon_titles)
+            
+            self.source_model = SourcesManager(self.project_path, debug=self.debug)
 
-        if len(self.taxon_titles) != 0:
-            self.version_model = VersionManager(self.project_path, self.taxon_titles, debug=self.debug)
-            self.search_for_update_finished.connect(self.on_update_search_finished)
-            self.search_for_update()
+            if len(self.local_taxons) != 0:
+                self.version_model = VersionManager(self.project_path, self.local_taxons, debug=self.debug)
+                self.search_for_update_finished.connect(self.on_update_search_finished)
+                self.search_for_update()
+
+        else :
+            self.taxons = TAXONS
+            self.version_model = VersionManager(self.project_path, TAXONS, debug=self.debug)
+
+            print_debug_info(self.debug, 1, "Il n'y a ni de fichier 'Donnees.gpkg', ni de fichier 'Statuts.gpkg'. Aucune mise à jour ne se fera automatiquement. Cliquez sur le bouton prévu à cet effet si vous souhaitez tout de même faire une mise à jour des taxons et/ou statuts.")
 
     def cancel_process(self):
         """
@@ -56,24 +76,14 @@ class UpdateController(QThread):
         self.cancel_requested.emit()  # Émet un signal pour annuler les threads en cours
         self.terminate()
 
-    def get_taxon_title_from_data(self):
-
-        data_path = os.path.join(self.project_path, "Données.gpkg")
-
-        if os.path.isfile(data_path) :
-            available_layers = gpd.list_layers(data_path)
-            if available_layers.shape[0] != 0 :
-                taxon_titles = available_layers["Name"].values
-                return taxon_titles
-        
-        return None
-
     def launch_updates(self):
 
-        self.download_window = ProgressionWindow(self.new_version, self.new_status, self.debug)
+        total_steps_number = 6 if self.new_version else 3 if self.new_status else 1
+
+        self.download_window = ProgressionWindow(total_steps_number, self.debug)
         self.global_progress.connect(self.download_window._global_increment_step)
         self.download_window.cancel_requested.connect(self.cancel_process)
-        self.last_save_finished.connect(self.download_window.close())
+        self.last_save_finished.connect(self.download_window.close)
         self.download_window.show()
 
         # Démarrage initial selon les paramètres
@@ -126,7 +136,7 @@ class UpdateController(QThread):
     def ask_update_status(self):
 
         text_lines = self.source_model.get_new_sources_list()
-        self.status_dialog = UpdateStatusDialog(text_lines, self.status_ids)
+        self.status_dialog = UpdateStatusDialog(text_lines, [status.type_id for status in self.local_status_types])
         self.dialog_result = self.status_dialog.exec_()
 
         print_debug_info(self.debug, 0, f"dialog_result = {self.dialog_result}, "
@@ -138,7 +148,7 @@ class UpdateController(QThread):
                 self.new_status = self.status_dialog.user_response
                 self.do_update = True
             if self.status_dialog.user_response:
-                self.local_status_ids = list(self.status_dialog.selected_statuses)
+                self.local_status_types = get_status_types_from_ids(list(self.status_dialog.selected_statuses))
                 self.ask_save_excel()
 
     def search_for_update(self):
@@ -152,8 +162,19 @@ class UpdateController(QThread):
         # Récupération de la version actuelle en ligne
         self.version_model.set_current_version()
 
+        # Récupération des taxons dans Statuts.gpkg
+        taxon_liste_status = get_taxon_titles(self.status_path, prefix="Liste ")
+        taxon_status_status = get_taxon_titles(self.status_path, prefix="Statuts ")
+
+        local_taxon_titles = [taxon.title for taxon in self.local_taxons]
+
+        # Check si les taxons de Donnees.gpkg sont les mêmes que dans Statuts.gpkg
+        cond_liste_status = all(taxon in taxon_liste_status for taxon in local_taxon_titles)
+        cond_status_status = all(taxon in taxon_status_status for taxon in local_taxon_titles)
+        cond_status = cond_liste_status & cond_status_status
+
         # Vérification si une mise à jour de la version est nécessaire
-        if self.version_model.data_version != self.version_model.current_version :
+        if (self.version_model.data_version != self.version_model.current_version) or not cond_status:
             self.new_version = True
             self.source_model.set_new_version(self.new_version)
             self.ask_update_taxref()
@@ -171,7 +192,7 @@ class UpdateController(QThread):
     def on_update_search_finished(self):
         
         if self.do_update :
-            print_debug_info(self.debug, 1, f"Les statuts selectionnés sont : {self.local_status_ids}")
+            print_debug_info(self.debug, 1, f"Les statuts selectionnés sont : {[status.type_id for status in self.local_status_types]}")
             print_debug_info(self.debug, 1, f"Save excel : {self.save_excel} et folder excel : {self.excel_folder}")
 
             # Démarrage initial selon les paramètres
@@ -180,7 +201,8 @@ class UpdateController(QThread):
     def on_bouton(self, first_start):
 
         if first_start :
-            self.dlg = AutoUpdateTAXREFDialog(taxon_titles=self.taxon_titles, status_names=STATUS_IDS)
+            self.dlg = AutoUpdateTAXREFDialog(taxons=self.local_taxons,
+                                              status_names=[status.type_id for status in STATUS_TYPES])
 
         # show the dialog
         self.dlg.reset_dialog()
@@ -193,10 +215,11 @@ class UpdateController(QThread):
 
             self.new_version = True if self.dlg.radio_taxref_all.isChecked() else False
             self.new_status = True if self.dlg.radio_status_only.isChecked() else False
-            self.local_taxons_titles = list(self.dlg.selected_taxons) 
-            self.local_status_ids = list(self.dlg.selected_statuses)
 
-            print_debug_info(self.debug, 0, f"Accepted : \nTAXREF : {self.new_version} \nStatus : {self.new_status}, {self.local_status_ids}")
+            self.local_taxons = get_taxon_from_titles(list(self.dlg.selected_taxons))
+            self.local_status_types = get_status_types_from_ids(list(self.dlg.selected_statuses))
+
+            print_debug_info(self.debug, 0, f"Accepted : \nTAXREF : {self.new_version} \nStatus : {self.new_status}, {[status.type_id for status in self.local_status_types]}")
 
             self.ask_save_excel()
             # Récupération de la version actuelle en ligne
@@ -253,7 +276,7 @@ class UpdateController(QThread):
         self.save_taxref_thread = SaveTaxrefThread(
             self.temp_file_path,
             self.version_model.current_version,
-            self.taxons,
+            self.local_taxons,
             self.project_path,
             self.synonyme)
         
@@ -274,8 +297,8 @@ class UpdateController(QThread):
         """
         self.get_status_thread = GetStatusThread(
             self.project_path,
-            self.taxon_titles,
-            self.status_ids,
+            self.local_taxons,
+            self.local_status_types,
             self.save_excel,
             self.excel_folder,
             debug=self.debug)

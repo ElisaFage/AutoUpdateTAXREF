@@ -32,7 +32,7 @@ from PyQt5.QtWidgets import (QLabel, QScrollArea,
                              QRadioButton, QButtonGroup,
                              QDialogButtonBox)
 from PyQt5.QtCore import Qt
-from .taxongroupe import TAXONS
+from .taxongroupe import TAXONS, TaxonGroupe
 
 # This loads your .ui file so that PyQt can populate your plugin with the elements from Qt Designer
 FORM_CLASS, _ = uic.loadUiType(os.path.join(
@@ -41,7 +41,7 @@ FORM_CLASS, _ = uic.loadUiType(os.path.join(
 
 class AutoUpdateTAXREFDialog(QtWidgets.QDialog, FORM_CLASS):
 
-    def __init__(self, parent=None, taxon_titles=None, status_names=None):
+    def __init__(self, parent=None, taxons: list[TaxonGroupe]=None, status_names=None):
         """Constructor."""
         super(AutoUpdateTAXREFDialog, self).__init__(parent)
         # Initialisation de l'interface utilisateur
@@ -58,7 +58,7 @@ class AutoUpdateTAXREFDialog(QtWidgets.QDialog, FORM_CLASS):
                 child.deleteLater()
 
         all_taxon_titles = [taxon.title for taxon in TAXONS]
-        self.taxon_titles = taxon_titles if taxon_titles != None else all_taxon_titles
+        self.taxon_titles = [taxon.title for taxon in taxons] if taxons != None else all_taxon_titles
         self.selected_taxons = set(self.taxon_titles)   # Contient les taxons selectionnés
 
         self.status_names = status_names
@@ -67,10 +67,9 @@ class AutoUpdateTAXREFDialog(QtWidgets.QDialog, FORM_CLASS):
         # Création d'un layout vertical pour inclure les nouveaux éléments
         layout = QVBoxLayout(self)
 
-        if taxon_titles == None :
-            self.update_taxon_choice_label = QLabel("Quel(s) taxon(s) doivent être mis à jour ?")
-            layout.addWidget(self.update_taxon_choice_label)
-            self.set_taxon_checkboxes(status_names, all_taxon_titles, layout)
+        self.update_taxon_choice_label = QLabel("Quel(s) taxon(s) doivent être mis à jour ?")
+        layout.addWidget(self.update_taxon_choice_label)
+        self.set_taxon_checkboxes(status_names, all_taxon_titles, layout)
 
         # Ajout de la question initiale avec deux choix
         self.update_choice_label = QLabel("Que souhaitez-vous mettre à jour ?")
@@ -161,13 +160,14 @@ class AutoUpdateTAXREFDialog(QtWidgets.QDialog, FORM_CLASS):
         self.radio_taxref_all.setChecked(True)
 
         # Réinitialiser les cases à cocher pour les taxons
-        for taxon_checkbox in self.taxon_checkboxes:
-            taxon_checkbox.setChecked(True)
-            taxon_checkbox.setEnabled(False)
+        if hasattr(self, "taxon_checkboxes"):
+            for taxon_checkbox in self.taxon_checkboxes:
+                taxon_checkbox.setChecked(True)
+                taxon_checkbox.setEnabled(False)
 
-        # Vider la sélection des taxons
-        self.selected_taxons.clear()
-        self.selected_taxons = set(self.taxon_titles)
+            # Vider la sélection des taxons
+            self.selected_taxons.clear()
+            self.selected_taxons = set(self.taxon_titles)
         
         # Réinitialiser les cases à cocher pour les statuts
         for status_checkbox in self.status_checkboxes:

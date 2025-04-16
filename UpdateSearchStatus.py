@@ -1,10 +1,9 @@
 import os
 import requests
-import numpy as np
 import pandas as pd
-import geopandas as gpd
 
-from .utils import print_debug_info, save_dataframe
+from .utils import (print_debug_info, save_dataframe,
+                    list_layers_from_gpkg, load_layer_as_dataframe)
 
 from datetime import date
 
@@ -33,11 +32,11 @@ class SourcesManager():
             print_debug_info(self.debug, 1, f"{self.check_update_status.__name__} : cherche available_layer")
    
             # Liste des couches disponibles dans le fichier GPKG
-            available_layers = gpd.list_layers(self.path)
+            available_layers = list_layers_from_gpkg(self.path)
 
             # Si la couche "Source" existe, lire les données dans un DataFrame
-            if self.layer_name in available_layers["name"].values :
-                self.data_sources = pd.DataFrame(gpd.read_file(self.path, layer=self.layer_name))
+            if self.layer_name in available_layers :
+                self.data_sources = load_layer_as_dataframe(self.path, layer_name=self.layer_name)
 
         return
 

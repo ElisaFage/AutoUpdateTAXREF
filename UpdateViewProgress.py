@@ -30,8 +30,7 @@ class ProgressionWindow(QWidget):
     version = None
 
     def __init__(self,
-                 new_version: bool = False,
-                 new_status: bool = False,
+                 total_steps: int,
                  debug: int = 0):
         """
         Initialise la fenêtre de téléchargement de TAXREF.
@@ -43,13 +42,11 @@ class ProgressionWindow(QWidget):
         super().__init__()
 
         # Définition des paramètres
-        self.new_version = new_version
-        self.new_status = new_status
         self.debug = debug
 
         # Compteurs et suivi d'étapes
         self.current_step = 0
-        self.total_steps = 6 if self.new_version else 3 if self.new_status else 1
+        self.total_steps = total_steps
 
         self._setup_ui()
 
@@ -86,8 +83,6 @@ class ProgressionWindow(QWidget):
         self.cancel_requested.emit()  # Émet un signal pour annuler les threads en cours
         self.update_global_progress_label("Annulation en cours...")
         self.close()
-
-    
 
     def update_step_progress_label(self, text: str):
         """
@@ -128,4 +123,4 @@ class ProgressionWindow(QWidget):
         self.global_progress_bar.setValue(progress)
 
     def _step_increment_step(self, progress):
-        self.global_progress_bar.setValue(progress)
+        self.current_step_progress_bar.setValue(progress)

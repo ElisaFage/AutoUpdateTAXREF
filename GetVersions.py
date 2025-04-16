@@ -5,14 +5,16 @@ import geopandas as gpd
 import numpy as np
 
 from urllib.request import urlopen
-from .utils import print_debug_info, get_file_save_path
+from .utils import (print_debug_info, get_file_save_path,
+                    list_layers_from_gpkg, load_layer_as_dataframe)
+from .taxongroupe import TaxonGroupe
 
 
 class VersionManager():
 
-    def __init__(self, path:str, taxon_titles: list[str], debug: int=0):
+    def __init__(self, path:str, taxons: list[TaxonGroupe], debug: int=0):
         
-        self.taxon_titles = taxon_titles
+        self.taxons = taxons
         self.path = path
         self.debug = debug
         self.data_version = -1
@@ -33,24 +35,27 @@ class VersionManager():
         # Liste pour stocker les versions extraites
         all_versions = []
 
-        # Parcours de chaque catégorie de taxon
-        for title in self.taxon_titles:
+        # Définir le chemin du fichier en fonction du titre du taxon
+        file_path = get_file_save_path(self.path)
+        
+        if os.path.isfile(file_path) :
+            available_layers = list_layers_from_gpkg(file_path)
+            print_debug_info(self.debug, 1, f"Les couches sont : {available_layers}")
 
-            # Définir le chemin du fichier en fonction du titre du taxon
-            file_path = get_file_save_path(self.path, title)
-
-            # Si le fichier n'existe pas, ajouter -1 à la liste des versions
-            if os.path.isfile(file_path) :
-                layer_name = f"Liste {title}"
-                available_layers = gpd.list_layers(self.path)
-                # Lire le fichier géospatial et vérifier la colonne "VERSION"
-                if layer_name in available_layers["name"].values:
-                    data = gpd.read_file(file_path, layer=layer_name)
+            # Parcours de chaque catégorie de taxon
+            for taxon in self.taxons:
+                layer_name = f"Liste {taxon.title}"
+                #gpd.list_layers(self.path)
+                
+                if layer_name in available_layers: #["name"].values:
+                    data = load_layer_as_dataframe(file_path, layer_name=layer_name)
+                    #gpd.read_file(file_path, layer=layer_name)
                     # Ajouter la version minimale ou -1 si la colonne "VERSION" est absente
                     all_versions.append(np.min(data["VERSION"].values) if "VERSION" in data.columns else -1)
-                
+            
         # Retourner la version minimale parmi toutes celles extraites
-        self.data_version = np.min(all_versions)
+        if all_versions != []:
+            self.data_version = np.min(all_versions)
 
         print_debug_info(self.debug, 0, f"Ma version: {self.data_version}")
 

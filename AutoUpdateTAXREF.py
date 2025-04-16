@@ -31,19 +31,9 @@ from qgis.PyQt.QtWidgets import QAction
 from .resources import *
 
 import os.path
-import geopandas as gpd
-from typing import List
 
 # Import du code pour la boÃ®te de dialogue du plugin
-from .AutoUpdateTAXREF_dialog import AutoUpdateTAXREFDialog
-from .GetVersions import recup_current_version
-from .UpdateSearchStatus import check_update_status
-from .UpdateStatusDialog import ask_save_excel
-from .ProgressDownload import DownloadWindow
-from .UpdateInit import UpdateInitThread
-from .taxongroupe import STATUS_IDS
-
-from UpdateController import UpdateController
+from .UpdateController import UpdateController
 
 
 class AutoUpdateTAXREF :
