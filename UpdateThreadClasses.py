@@ -251,6 +251,22 @@ class GetStatusThread(QThread):
 
         # Émet le signal de fin de processus
         self.finished.emit()
+    
+    def merge_and_save(self,
+                       taxon: TaxonGroupe,
+                       status_ids: set,
+                       cols_to_merge: list,
+                       save_type: str):
+        df_list = []
+        for status_id in status_ids:
+            path = os.path.join(self.path, f"{taxon.title}_{status_id}.gpkg")
+            if os.path.exists(path):
+                df_list.append(pd.DataFrame(gpd.read_file(path)))
+
+        if df_list:
+            merged = reduce(lambda left, right: pd.merge(left, right, on=cols_to_merge, how="outer"), df_list)
+            print_debug_info(self.debug, 0, f"Saving {taxon.title} ({save_type})")
+            save_global_status(merged, self.path, taxon.title, save_type=save_type, debug=self.debug)
 
     def concat_and_save(self):
         """
@@ -261,71 +277,32 @@ class GetStatusThread(QThread):
         GeoPackage ou Excel, selon les paramètres de la classe.
         """
 
-        print_debug_info(self.debug, 0, f"Start of savings")
+        print_debug_info(self.debug, 0, "Start of savings")
 
-        # Fusionner tous les DataFrames sur les colonnes "Région" et "CD_REF"
-        national_status = [status for status in STATUS_TYPES if status.is_national()]
-        #("DH", "DO", "LRN", "PN", "PNA", "PAPNAT")
+        # Pré-filtrage des statuts par type
+        national_status_ids = {status.type_id for status in STATUS_TYPES if status.is_national()}
+        regional_status_ids = {status.type_id for status in self.status_types if not status.is_national() and status.in_api}
+        national_status_ids_in_use = {status.type_id for status in self.status_types if status.type_id in national_status_ids and status.in_api}
+
         for taxon in self.taxons:
-            
-            print_debug_info(self.debug, 0, f"Start of saving {taxon.title} on regional")
-            # Traitement des statuts non nationaux
-            # # Verifier que des statuts non-nationaux sont mis à jour
-            if set(self.status_types) - (set(self.status_types) & set(national_status)) :
+            print_debug_info(self.debug, 0, f"Processing {taxon.title}")
 
-                col_to_merge = ["Région", "CD_REF"]
+            # Sauvegarde régionale
+            if regional_status_ids:
+                self.merge_and_save(taxon, regional_status_ids, ["Région", "CD_REF"], "regional")
 
-                # Rassemble les différents tableau en 1 pour chaque taxon
-                df_to_reduce = [pd.DataFrame(
-                    gpd.read_file(os.path.join(self.path, f"{taxon.title}_{status.type_id}.gpkg")))
-                    for status in self.status_types if not status.is_national()]
+            # Sauvegarde nationale
+            if national_status_ids_in_use:
+                self.merge_and_save(taxon, national_status_ids_in_use, ["CD_REF"], "national")
 
-                # status.type_id for status in self.statuses if status.is_regional()
-                # Fusionner les DataFrames sur la colonne "CD_REF"
-                status_updated_array = reduce(
-                    lambda left, right: pd.merge(left, right, on=col_to_merge, how="outer"), df_to_reduce)
+            print_debug_info(self.debug, 0, f"Cleanup for {taxon.title}")
+            # Nettoyage des fichiers temporaires
+            for status in self.status_types:
+                path = os.path.join(self.path, f"{taxon.title}_{status.type_id}.gpkg")
+                if status.in_api and os.path.isfile(path) :
+                    os.remove(path)
                 
-                print_debug_info(self.debug, 0, f"Start of saving {taxon.title} on regional")
-                # Sauvegarde les nouvelles colonnes
-                save_global_status(status_updated_array,
-                                self.path,
-                                taxon.title,
-                                save_type="regional",
-                                debug=self.debug)
-            
-
-            # Traitement des statuts nationaux
-            if set(self.status_types) & set(national_status):
-
-                col_to_merge = ["CD_REF"]
-
-                # Rassemble les différents tableau en 1 pour chaque taxon
-                df_to_reduce = [pd.DataFrame(
-                    gpd.read_file(os.path.join(self.path, f"{taxon.title}_{status.type_id}.gpkg")))
-                    for status in self.status_types if status.is_national()]
-            
-                # Fusionner les DataFrames sur la colonne "CD_REF"
-                status_updated_array = reduce(
-                    lambda left, right: pd.merge(left, right, on=col_to_merge, how="outer"), df_to_reduce)
-                
-                print_debug_info(self.debug, 0, f"Start of saving {taxon.title} on national")
-                # Sauvegarde les nouvelles colonnes
-                save_global_status(status_updated_array,
-                                self.path,
-                                taxon.title,
-                                save_type="national",
-                                debug=self.debug)
-
-            print_debug_info(self.debug, 0, f"End of saving {taxon.title}")
-            
-            # Supprimer les fichiers temporaires pour chaque status_id
-            for status in self.status_types :
-                # Supprime les fichiers temporaires
-                os.remove(os.path.join(self.path, f"{taxon.title}_{status.type_id}.gpkg"))
-
-        print_debug_info(self.debug, 0, f"End of savings")
-
-        return
+        print_debug_info(self.debug, 0, "End of savings")
 
     def termination_process(self):
         """
@@ -338,7 +315,8 @@ class GetStatusThread(QThread):
         # Supprime les fichier temporaire
         if self.pathes_temp_file :
             for path in self.pathes_temp_file:
-                os.remove(path)
+                if os.path.isfile(path):
+                    os.remove(path)
         
         # Termine le thread de force
         self.terminate()

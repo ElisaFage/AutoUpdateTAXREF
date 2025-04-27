@@ -280,7 +280,7 @@ def generate_status_by_level(df: pd.DataFrame, level_name: str,
             filtered_df = df[region_filter_func(region)]
 
             # Assurez-vous que les colonnes nécessaires existent dans filtered_df
-            required_columns = ["CD_REF", "Région", "locationName", "locationAdminLevel", "statusRemarks", "statusName"]
+            required_columns = ["CD_REF", "locationName", "locationAdminLevel", "statusRemarks", "statusName"]
             missing_columns = [col for col in required_columns if col not in filtered_df.columns]
             if missing_columns:
                 raise ValueError(f"Colonnes manquantes dans le DataFrame filtré : {', '.join(missing_columns)}")
@@ -483,7 +483,7 @@ def make_status_array(status: StatusType,
 
     # Preprocess des statuts pour organiser les colonnes et avoir les status code avant tri
     status_data_preprocessed = reorganize_columns_and_codes(status_array_in,
-                                                            status.type_id,
+                                                            status,
                                                             taxon_title,
                                                             oiseaux_keywords)
 
@@ -508,6 +508,19 @@ def make_status_array(status: StatusType,
     print_debug_info(debug, 1, f"Pour {status.type_id} au taxon {taxon_title}, fin de make_status_array")
 
     return status_array_out
+
+def get_all_status_type():
+    
+    url = "https://taxref.mnhn.fr/api/status/types"
+
+    response = requests.get(url)
+    data_json = response.json()
+
+    status_list = data_json['_embedded']['statusTypes']
+    df_page = pd.json_normalize(status_list, sep='_')
+    list_types = df_page["id"].to_list()
+
+    return list_types
 
 #
 @time_decorator
@@ -659,7 +672,7 @@ def run_download_status(status: StatusType,
                         path: str,
                         save_excel: bool,
                         folder_excel: str,
-                        debug: int=0):
+                        debug: int=0)->str:
     """
     Télécharge les statuts d'un type donné (status_id) pour les taxons spécifiés, puis les sauvegarde
     dans un fichier GeoPackage (.gpkg). Si nécessaire, les résultats sont également enregistrés sous forme
@@ -688,22 +701,30 @@ def run_download_status(status: StatusType,
         Liste des chemins vers les fichiers GeoPackage générés.
     """
 
-    # Télécharger les données de statu
-    dict_make_array_out = download_status(status,
-                                          taxons,
-                                          path,
-                                          save_excel,
-                                          folder_excel,
-                                          debug=debug)
+    list_all_status_type_ids = get_all_status_type()
+    status.set_in_api(bool_val = (status.type_id in list_all_status_type_ids))
+    if  status.in_api :
 
-    # Sauvegarder les données sous forme de fichiers GeoPackage temporaires
-    temp_pathes = save_temp_file_status(dict_make_array_out,
-                                        status,
-                                        taxons,
-                                        path,
-                                        debug=debug)
+        # Télécharger les données de statu
+        dict_make_array_out = download_status(status,
+                                              taxons,
+                                              path,
+                                              save_excel,
+                                              folder_excel,
+                                              debug=debug)
 
-    return temp_pathes
+        # Sauvegarder les données sous forme de fichiers GeoPackage temporaires
+        temp_pathes = save_temp_file_status(dict_make_array_out,
+                                            status,
+                                            taxons,
+                                            path,
+                                            debug=debug)
+        return temp_pathes
+    
+    else :
+        print_debug_info(1, 0, f"Le type de status '{status.type_id}' n'est pas reconnu comme un status dans l'API TAXREF.")
+
+        return ""
 
 def reorder_columns(df: pd.DataFrame)->pd.DataFrame:
     """

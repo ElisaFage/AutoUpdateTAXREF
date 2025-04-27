@@ -33,9 +33,9 @@ def time_decorator(function):
 
     def wrapper(*args, **kwargs):
 
-        print_debug_info(f"Début de {function.__name__}")
+        print_debug_info(1, 0, f"Début de {function.__name__}")
         rv = function(*args, **kwargs)
-        print_debug_info(f"Fin de {function.__name__}")
+        print_debug_info(1, 0, f"Fin de {function.__name__}")
 
         return rv
     
@@ -90,8 +90,9 @@ def save_dataframe(df: pd.DataFrame,
     
     # Conversion en GeoDataFrame avant sauvegarde
     gdf = gpd.GeoDataFrame(df)
-
+    if 'fid' in gdf.columns:
+        gdf = gdf.drop(columns='fid', errors='ignore')  # ou renommer si nécessaire
     # Sauvegarde dans le fichier GeoPackage sous la couche {layer}
-    gdf.to_file(path, layer=layer)
+    gdf.to_file(path, layer=layer, index=True)
 
     return
