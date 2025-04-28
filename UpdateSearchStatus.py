@@ -37,6 +37,9 @@ class SourcesManager():
             # Si la couche "Source" existe, lire les données dans un DataFrame
             if self.layer_name in available_layers :
                 self.data_sources = load_layer_as_dataframe(self.path, layer_name=self.layer_name)
+        
+        else :
+            self.data_sources = pd.DataFrame(columns=self.required_columns)
 
         return
 

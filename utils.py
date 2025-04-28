@@ -1,5 +1,6 @@
 from qgis.core import (QgsMessageLog, Qgis,
-                       QgsProject, QgsVectorLayer)
+                       QgsProject, QgsVectorLayer,
+                       QgsProviderRegistry, Qgis)
 from datetime import datetime
 import os
 import re
@@ -41,7 +42,15 @@ def time_decorator(function):
     
     return wrapper
 
-def list_layers_from_gpkg(filepath: str):
+def is_gpkg_open(filepath: str):
+    filepath = filepath.replace('\\', '/')  # Normaliser les chemins Windows
+    for layer in QgsProject.instance().mapLayers().values():
+        # layer.source() donne le chemin source, parfois avec des paramètres supplémentaires
+        if layer.source().startswith(filepath):
+            return True
+    return False
+
+def list_layers_from_qgis(filepath: str):
 
     filepath = str(filepath).lower().replace("\\", "/")
 
@@ -58,6 +67,25 @@ def list_layers_from_gpkg(filepath: str):
     #print_debug_info(1, 0, filepath)
 
     return layer_names
+
+def list_layers_from_gpkg(filepath: str):
+
+    filepath = str(filepath).replace("\\", "/")
+    layers = []
+    
+    metadata = QgsProviderRegistry.instance().providerMetadata('ogr')
+    
+    try:
+        sublayers = metadata.querySublayers(filepath)
+        for sublayer in sublayers:
+            layers.append(sublayer.name)
+    except AttributeError:
+        # Si querySublayers n'existe pas (ex: QGIS 3.34), fallback
+        layer_list = metadata.listLayers(filepath, 'GPKG')
+        for layer_info in layer_list:
+            layers.append(layer_info.name)
+    
+    return layers
 
 def load_layer_as_dataframe(filepath: str, layer_name: str):
     uri = f"{filepath}|layername={layer_name}"
@@ -85,14 +113,25 @@ def get_file_save_path(path: str,
 
 @time_decorator
 def save_dataframe(df: pd.DataFrame,
-                   path: str,
-                   layer: str)->None:
+                   filepath: str,
+                   layername: str)->None:
     
     # Conversion en GeoDataFrame avant sauvegarde
     gdf = gpd.GeoDataFrame(df)
-    if 'fid' in gdf.columns:
-        gdf = gdf.drop(columns='fid', errors='ignore')  # ou renommer si nécessaire
-    # Sauvegarde dans le fichier GeoPackage sous la couche {layer}
-    gdf.to_file(path, layer=layer, index=True)
+    print_debug_info(1,0, f"{layername} : {gdf.columns}")
 
+    # Étape 1 : vérifier si une couche utilise ce fichier + layername
+    layers_to_remove = []
+    for layer in QgsProject.instance().mapLayers().values():
+        if layer.source().startswith(filepath) and f"layername={layername}" in layer.source():
+            layers_to_remove.append(layer)
+
+    # Étape 2 : si oui, la retirer du projet
+    if layers_to_remove:
+        for layer in layers_to_remove:
+            QgsProject.instance().removeMapLayer(layer.id())
+    
+    # Étape 3 : sauver le GeoDataFrame
+    gdf.to_file(filepath, layer=layername, driver="GPKG")
+    
     return

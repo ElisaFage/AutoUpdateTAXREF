@@ -61,11 +61,14 @@ class UpdateController(QThread):
             if len(self.local_taxons) != 0:
                 self.version_model = VersionManager(self.project_path, self.local_taxons, debug=self.debug)
                 self.search_for_update_finished.connect(self.on_update_search_finished)
-                self.search_for_update()
+                self.search_for_update() 
+            else :
+                self.version_model = VersionManager(self.project_path, TAXONS, debug=self.debug)  
 
         else :
-            self.taxons = TAXONS
+            self.local_taxons = TAXONS
             self.version_model = VersionManager(self.project_path, TAXONS, debug=self.debug)
+            self.source_model = SourcesManager(self.project_path, debug=self.debug)
 
             print_debug_info(self.debug, 1, "Il n'y a ni de fichier 'Donnees.gpkg', ni de fichier 'Statuts.gpkg'. Aucune mise à jour ne se fera automatiquement. Cliquez sur le bouton prévu à cet effet si vous souhaitez tout de même faire une mise à jour des taxons et/ou statuts.")
 
@@ -201,6 +204,8 @@ class UpdateController(QThread):
     def on_bouton(self, first_start):
 
         if first_start :
+            if self.local_taxons == [] :
+                self.local_taxons = TAXONS
             self.dlg = AutoUpdateTAXREFDialog(taxons=self.local_taxons,
                                               status_names=[status.type_id for status in STATUS_TYPES])
 

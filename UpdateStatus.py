@@ -842,14 +842,17 @@ def save_global_status(status_df: pd.DataFrame,
     elif save_type == national_value:
         layer_name = f"Liste {taxon_title}"
         # Cas particulier : pour les oiseaux, ignorer "LRN" lors de la fusion
-        bird_col = ["LRN"] if taxon_title == "Oiseaux" else []
+        bird_col = [LISTE_ROUGE_NATIONALE.type_id] if taxon_title == OISEAUX.title else []
     else:
         raise ValueError(f"save_type should be either \"{national_value}\" or \"{regional_value}\" but is : {save_type}")
     
     # Si une couche existe déjà, on la lit et prépare une fusion avec les nouvelles données
     if layer_name in available_layers :#["name"].values:
+        print_debug_info(1, 0, f"{layer_name} in {available_layers}")
         old_file = load_layer_as_dataframe(file_save_path, layer_name=layer_name)
         #pd.DataFrame(gpd.read_file(file_save_path, layer=layer_name))
+
+        print_debug_info(1, 0, f"{layer_name} old_file : {old_file.columns}")
 
         # Forcer les colonnes clé en chaîne pour éviter les erreurs de jointure
         old_file['CD_REF'] = old_file['CD_REF'].astype(str) 
