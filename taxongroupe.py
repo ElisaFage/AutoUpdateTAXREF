@@ -1,5 +1,6 @@
 import pandas as pd
-from .utils import list_layers_from_gpkg, print_debug_info
+from .utils import list_layers_from_gpkg, list_layers_from_qgis, print_debug_info
+#from utils2 import list_layers_from_gpkg, list_layers_from_qgis, print_debug_info
 
 class TaxonGroupe():
 
@@ -263,16 +264,18 @@ def get_taxon_titles(path:str, prefix: str=None)->list[str]:
     Returns:
         list: Liste des noms de couches ou des noms de taxons extraits.
     """
-    available_layers = list_layers_from_gpkg(path)
+    available_layers = list_layers_from_qgis(path)
     if not available_layers:
         return []
 
     if prefix is None:
         return available_layers
 
+    print_debug_info(1,0,f"available_layers : {available_layers}")
     taxon_titles = [taxon.split(" ")[-1] for taxon in available_layers if taxon.startswith(prefix)]
+    print_debug_info(1,0,f"taxon_titles : {taxon_titles}")
     real_taxon_titles = [title for title in taxon_titles if title in TAXON_TITLES]
-    print_debug_info(1, 0, f"{real_taxon_titles}")
+    #print_debug_info(1,0,f"real_taxon_titles : {real_taxon_titles}")
     return real_taxon_titles
 
 def get_taxon_from_titles(taxon_titles: list[str])->list[TaxonGroupe]:

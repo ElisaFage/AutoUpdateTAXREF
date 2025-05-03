@@ -9,7 +9,7 @@ from typing import List
 import json
 import zipfile
 
-from .utils import print_debug_info, get_file_save_path, save_dataframe
+from .utils import print_debug_info, get_file_save_path, save_dataframe, save_to_gpkg_via_qgs
 from .taxongroupe import TaxonGroupe, AMPHIBIENS, REPTILES, OISEAUX, MAMMIFERES
 
 # Générer l'URL de téléchargement pour une version donnée
@@ -212,7 +212,7 @@ def tri_taxon_taxref(temp_zip_path:str,
             file_save_path = get_file_save_path(save_path, taxon.title)
 
             # Enregistrer dans un GeoPackage
-            save_dataframe(df_filtre_nom_vern, file_save_path, f"Liste {taxon.title}")
+            save_to_gpkg_via_qgs(df_filtre_nom_vern, file_save_path, f"Liste {taxon.title}")
 
     
     # Supprimer les fichiers temporaire ZIP

@@ -23,9 +23,10 @@
 """
 # Import les classes de qgis et  qgis.PyQt
 from qgis.core import QgsMessageLog, Qgis, QgsProject
-from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication
+from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, QTimer
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction
+
 
 # Initialisation des ressources Qt depuis le fichier resources.py
 from .resources import *
@@ -72,7 +73,7 @@ class AutoUpdateTAXREF :
         # Must be set in initGui() to survive plugin reloads
         self.first_start = None
 
-        QgsProject.instance().readProject.connect(self.on_project_loaded)
+        QgsProject.instance().readProject.connect(self.defer_on_project_loaded)
 
     # noinspection PyMethodMayBeStatic
     def tr(self, message):
@@ -189,11 +190,16 @@ class AutoUpdateTAXREF :
 
         # Create the dialog with elements (after translation) and keep reference
         # Only create GUI ONCE in callback, so that it will only load when the plugin is started
+        if hasattr(self, "update_controller"):
+            if not self.update_controller.running :
+                self.update_controller.on_bouton(self.first_start)
+                self.first_start = False
 
-        self.update_controller.on_bouton(self.first_start)
-        self.first_start = False
+    def defer_on_project_loaded(self):
+        # Lance la fonction réelle après que tout est prêt
+        QTimer.singleShot(0, self.on_project_fully_loaded)
 
-    def on_project_loaded(self):
+    def on_project_fully_loaded(self):
         
         project_path = os.path.dirname(QgsProject.instance().fileName())
         self.update_controller = UpdateController(

@@ -10,7 +10,8 @@ import geopandas as gpd
 from PyQt5.QtCore import QThread, pyqtSignal
 
 from .UpdateTAXREF import get_download_url, tri_taxon_taxref
-from .UpdateStatus import run_download_status, save_global_status
+from .UpdateStatus import run_download_status
+from .UpdateSaveStatus import save_global_status
 from .utils import print_debug_info
 from .taxongroupe import TaxonGroupe
 from .statustype import StatusType, STATUS_TYPES

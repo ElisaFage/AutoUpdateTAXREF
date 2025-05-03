@@ -30,6 +30,7 @@ from .UpdateViewProgress import ProgressionWindow
 
 class UpdateController(QThread):
     cancel_requested = pyqtSignal()  # Signal pour annuler les threads
+    update_launch_signal = pyqtSignal()
     last_save_finished = pyqtSignal()
     
     search_for_update_finished = pyqtSignal()
@@ -39,6 +40,9 @@ class UpdateController(QThread):
 
         super().__init__()
 
+        self.running = False
+        self.last_save_finished.connect(self.run_state_off)
+        self.update_launch_signal.connect(self.run_state_on)
         self.project_path = project_path
         self.debug = debug
         
@@ -56,7 +60,7 @@ class UpdateController(QThread):
             local_taxon_titles = get_taxon_titles(self.data_path)
             self.local_taxons = get_taxon_from_titles(local_taxon_titles)
             
-            self.source_model = SourcesManager(self.project_path, debug=self.debug)
+            self.source_model = SourcesManager(self.data_path, debug=self.debug)
 
             if len(self.local_taxons) != 0:
                 self.version_model = VersionManager(self.project_path, self.local_taxons, debug=self.debug)
@@ -68,9 +72,15 @@ class UpdateController(QThread):
         else :
             self.local_taxons = TAXONS
             self.version_model = VersionManager(self.project_path, TAXONS, debug=self.debug)
-            self.source_model = SourcesManager(self.project_path, debug=self.debug)
+            self.source_model = SourcesManager(self.data_path, debug=self.debug)
 
             print_debug_info(self.debug, 1, "Il n'y a ni de fichier 'Donnees.gpkg', ni de fichier 'Statuts.gpkg'. Aucune mise à jour ne se fera automatiquement. Cliquez sur le bouton prévu à cet effet si vous souhaitez tout de même faire une mise à jour des taxons et/ou statuts.")
+
+    def run_state_off(self):
+        self.running = False
+
+    def run_state_on(self):
+        self.running = True
 
     def cancel_process(self):
         """
@@ -80,6 +90,8 @@ class UpdateController(QThread):
         self.terminate()
 
     def launch_updates(self):
+
+        self.running = True
 
         total_steps_number = 6 if self.new_version else 3 if self.new_status else 1
 
@@ -166,10 +178,13 @@ class UpdateController(QThread):
         self.version_model.set_current_version()
 
         # Récupération des taxons dans Statuts.gpkg
-        taxon_liste_status = get_taxon_titles(self.status_path, prefix="Liste ")
-        taxon_status_status = get_taxon_titles(self.status_path, prefix="Statuts ")
+        taxon_liste_status = get_taxon_titles(self.status_path, prefix="Liste")
+        taxon_status_status = get_taxon_titles(self.status_path, prefix="Statuts")
 
         local_taxon_titles = [taxon.title for taxon in self.local_taxons]
+        print_debug_info(1, 0, f"local_taxon_title : {local_taxon_titles}")
+        print_debug_info(1, 0, f"taxon_liste_status : {taxon_liste_status}")
+        print_debug_info(1, 0, f"local_status_status: {taxon_status_status}")
 
         # Check si les taxons de Donnees.gpkg sont les mêmes que dans Statuts.gpkg
         cond_liste_status = all(taxon in taxon_liste_status for taxon in local_taxon_titles)

@@ -2,8 +2,9 @@ import os
 import requests
 import pandas as pd
 
-from .utils import (print_debug_info, save_dataframe,
-                    list_layers_from_gpkg, load_layer_as_dataframe)
+from .utils import (print_debug_info, save_dataframe, save_to_gpkg_via_qgs,
+                    list_layers_from_gpkg, list_layers_from_qgis, load_layer_as_dataframe,
+                    save_decorator)
 
 from datetime import date
 
@@ -14,7 +15,7 @@ class SourcesManager():
 
     def __init__(self, path: str, new_version: bool=False, year:int=None, debug: int=0):
     
-        self.path = os.path.join(path, "Donnée.gpkg")
+        self.path = path
         self.new_version = new_version
 
         self.current_year = year if year != None else date.today().year
@@ -32,7 +33,7 @@ class SourcesManager():
             print_debug_info(self.debug, 1, f"{self.check_update_status.__name__} : cherche available_layer")
    
             # Liste des couches disponibles dans le fichier GPKG
-            available_layers = list_layers_from_gpkg(self.path)
+            available_layers = list_layers_from_qgis(self.path)
 
             # Si la couche "Source" existe, lire les données dans un DataFrame
             if self.layer_name in available_layers :
@@ -135,7 +136,8 @@ class SourcesManager():
         # Filtrer les sources absentes
         new_sources = currentSources[currentSources["id"].astype(str).isin(ids_absents["id"].astype(str).values)][self.required_columns].copy()
 
-        print_debug_info(self.debug, 1, f"Les id absent sont : {ids_absents["id"].values}")
+        print_debug_info(self.debug, 1, f"Les id presents sont : {currentSources["id"].values}")
+        print_debug_info(self.debug, 1, f"Les id absents sont : {ids_absents["id"].values}")
 
         self.new_sources = new_sources
 
@@ -145,7 +147,8 @@ class SourcesManager():
         self.new_version=new_version
         return
 
-    def save_new_sources(self)->None:
+    @save_decorator(save_to_gpkg_via_qgs)
+    def save_new_sources(self)->tuple[pd.DataFrame, str, str]:
         """
         Met à jour et sauvegarde les sources bibliographiques dans un fichier GeoPackage.
 
@@ -183,6 +186,6 @@ class SourcesManager():
             # Ajout des nouvelles sources passées en paramètre
             self.data_sources = pd.concat([self.data_sources, self.new_sources], ignore_index=True)
         
-        save_dataframe(self.data_sources, self.path, self.layer_name)
+        #save_to_gpkg_via_qgs(self.data_sources, self.path, self.layer_name)
 
-        return
+        return self.data_sources, self.path, self.layer_name

@@ -33,6 +33,7 @@ from PyQt5.QtWidgets import (QLabel, QScrollArea,
                              QDialogButtonBox)
 from PyQt5.QtCore import Qt
 from .taxongroupe import TAXONS, TaxonGroupe
+from .utils import print_debug_info
 
 # This loads your .ui file so that PyQt can populate your plugin with the elements from Qt Designer
 FORM_CLASS, _ = uic.loadUiType(os.path.join(
@@ -58,7 +59,7 @@ class AutoUpdateTAXREFDialog(QtWidgets.QDialog, FORM_CLASS):
                 child.deleteLater()
 
         all_taxon_titles = [taxon.title for taxon in TAXONS]
-        self.taxon_titles = [taxon.title for taxon in taxons] if taxons != None else all_taxon_titles
+        self.taxon_titles = [taxon.title for taxon in taxons] if taxons != None else []
         self.selected_taxons = set(self.taxon_titles)   # Contient les taxons selectionnés
 
         self.status_names = status_names
@@ -122,7 +123,9 @@ class AutoUpdateTAXREFDialog(QtWidgets.QDialog, FORM_CLASS):
         if status_names:
             for i, taxon in enumerate(all_taxon_titles):
                 taxon_checkbox = QCheckBox(taxon)
-                taxon_checkbox.setChecked(True)  # Coché par défaut
+                taxon_in_data = taxon in self.taxon_titles
+                taxon_checkbox.setChecked(taxon_in_data)  # Coché par défaut
+                taxon_checkbox.setEnabled(True)  # Rendre cochable les case
                 taxon_checkbox.stateChanged.connect(self.on_taxon_checkbox_changed)
                 self.taxon_checkboxes[taxon_checkbox] = taxon
                 taxon_checkbox_layout.addWidget(taxon_checkbox, i // 2, i % 2)  # Deux colonnes
@@ -162,8 +165,9 @@ class AutoUpdateTAXREFDialog(QtWidgets.QDialog, FORM_CLASS):
         # Réinitialiser les cases à cocher pour les taxons
         if hasattr(self, "taxon_checkboxes"):
             for taxon_checkbox in self.taxon_checkboxes:
-                taxon_checkbox.setChecked(True)
-                taxon_checkbox.setEnabled(False)
+                taxon_in_data = self.taxon_checkboxes[taxon_checkbox] in self.taxon_titles
+                taxon_checkbox.setChecked(taxon_in_data)
+                taxon_checkbox.setEnabled(True)
 
             # Vider la sélection des taxons
             self.selected_taxons.clear()

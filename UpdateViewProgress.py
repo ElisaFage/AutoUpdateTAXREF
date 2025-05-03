@@ -104,6 +104,7 @@ class ProgressionWindow(QWidget):
         Callback appelé lorsque l'enregistrement des sources est terminé.
         """
         self.close()
+        
     def update_global_progress_label(self, text: str):
         """
         Met à jour le texte du label principal.

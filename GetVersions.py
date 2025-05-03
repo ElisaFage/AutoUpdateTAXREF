@@ -6,7 +6,8 @@ import numpy as np
 
 from urllib.request import urlopen
 from .utils import (print_debug_info, get_file_save_path,
-                    list_layers_from_gpkg, load_layer_as_dataframe)
+                    list_layers_from_gpkg, list_layers_from_qgis, 
+                    load_layer_as_dataframe)
 from .taxongroupe import TaxonGroupe
 
 
@@ -39,7 +40,7 @@ class VersionManager():
         file_path = get_file_save_path(self.path)
         
         if os.path.isfile(file_path) :
-            available_layers = list_layers_from_gpkg(file_path)
+            available_layers = list_layers_from_qgis(file_path)
             print_debug_info(self.debug, 1, f"Les couches sont : {available_layers}")
 
             # Parcours de chaque catégorie de taxon
@@ -51,7 +52,11 @@ class VersionManager():
                     data = load_layer_as_dataframe(file_path, layer_name=layer_name)
                     #gpd.read_file(file_path, layer=layer_name)
                     # Ajouter la version minimale ou -1 si la colonne "VERSION" est absente
-                    all_versions.append(np.min(data["VERSION"].values) if "VERSION" in data.columns else -1)
+                    if "VERSION" in data.columns and not data["VERSION"].empty:
+                        version_values = data["VERSION"].fillna(-1).values
+                        all_versions.append(np.min(version_values))
+                    else:
+                        all_versions.append(-1)
             
         # Retourner la version minimale parmi toutes celles extraites
         if all_versions != []:
