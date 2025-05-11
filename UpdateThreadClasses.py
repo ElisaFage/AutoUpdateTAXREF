@@ -260,12 +260,16 @@ class GetStatusThread(QThread):
                        save_type: str):
         
         df_list = []
+        print_debug_info(1,0, f"{status_ids}")
         for status_id in status_ids:
             path = os.path.join(self.path, f"{taxon.title}_{status_id}.gpkg")
             if os.path.exists(path):
                 df_to_add = pd.DataFrame(gpd.read_file(path))
+                
                 if not df_to_add.empty :
                     df_list.append(df_to_add)
+
+        #print_debug_info(1,0, f"{df_list}")
 
         if df_list:
             merged = reduce(lambda left, right: pd.merge(left, right, on=cols_to_merge, how="outer"), df_list)

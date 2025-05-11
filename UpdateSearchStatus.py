@@ -147,8 +147,7 @@ class SourcesManager():
         self.new_version=new_version
         return
 
-    @save_decorator(save_to_gpkg_via_qgs)
-    def save_new_sources(self)->tuple[pd.DataFrame, str, str]:
+    def save_new_sources(self)->None:
         """
         Met à jour et sauvegarde les sources bibliographiques dans un fichier GeoPackage.
 
@@ -186,6 +185,6 @@ class SourcesManager():
             # Ajout des nouvelles sources passées en paramètre
             self.data_sources = pd.concat([self.data_sources, self.new_sources], ignore_index=True)
         
-        #save_to_gpkg_via_qgs(self.data_sources, self.path, self.layer_name)
+        save_to_gpkg_via_qgs(self.data_sources, self.path, self.layer_name)
 
-        return self.data_sources, self.path, self.layer_name
+        return 

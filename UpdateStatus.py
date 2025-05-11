@@ -6,15 +6,15 @@ import os
 import requests
 from typing import List, Tuple, Dict
 
-"""from .utils import (print_debug_info, get_file_save_path,
-                    time_decorator, save_dataframe,
-                    load_layer_as_dataframe, list_layers_from_gpkg, list_layers_from_qgis)"""
-
-from utils2 import (print_debug_info, get_file_save_path,
+from .utils import (print_debug_info, get_file_save_path,
                     time_decorator, save_dataframe,
                     load_layer_as_dataframe, list_layers_from_gpkg, list_layers_from_qgis)
-from taxongroupe import (TaxonGroupe, OISEAUX)
-from statustype import (StatusType, STATUS_TYPES,
+
+"""from utils2 import (print_debug_info, get_file_save_path,
+                    time_decorator, save_dataframe,
+                    load_layer_as_dataframe, list_layers_from_gpkg, list_layers_from_qgis)"""
+from .taxongroupe import (TaxonGroupe, OISEAUX)
+from .statustype import (StatusType, STATUS_TYPES,
                           LUTTE_CONTRE_ESPECES, 
                           LISTE_ROUGE_NATIONALE, LISTE_ROUGE_REGIONALE,
                           PROTECTION_DEPARTEMENTALE, PROTECTION_NATIONALE, PROTECTION_REGIONALE,

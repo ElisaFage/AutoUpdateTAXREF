@@ -10,7 +10,8 @@ from qgis.core import (
     QgsCoordinateReferenceSystem, # Pour définir le CRS (référence spatiale)
     QgsVectorDataProvider, # Pour accéder et modifier les données de la couche
     QgsProviderRegistry,
-    Qgis)
+    Qgis,
+    QgsWkbTypes)
 
 from PyQt5.QtCore import QVariant  # Pour spécifier les types de données des colonnes
 
@@ -43,6 +44,33 @@ def print_debug_info(debug_level: int,
         QgsMessageLog.logMessage(full_message, "AutoUpdateTAXREF", level=Qgis.Info)
 
     return
+
+def log_features(features: list, title="Features") -> None:
+    QgsMessageLog.logMessage(f"\t{title} ({len(features)} entités) :", "AutoUpdateTAXREF")
+    for i, feat in enumerate(features):
+        QgsMessageLog.logMessage(f"\t{i}: ID={feat.id()}, Attributs={feat.attributes()}", "AutoUpdateTAXREF")
+        if feat.hasGeometry():
+            QgsMessageLog.logMessage(f"\t{i}: Géométrie={feat.geometry().asWkt()}", "AutoUpdateTAXREF")
+        if i >= 9:
+            QgsMessageLog.logMessage("\t… (affichage limité à 10 entités)", "AutoUpdateTAXREF")
+            break
+
+def log_layer(layer: QgsVectorLayer, title="Layer") -> None:
+    QgsMessageLog.logMessage(f"\t{title} :", "AutoUpdateTAXREF")
+    QgsMessageLog.logMessage(f"\t  Nom : {layer.name()}", "AutoUpdateTAXREF")
+    QgsMessageLog.logMessage(f"\t  Source : {layer.source()}", "AutoUpdateTAXREF")
+    QgsMessageLog.logMessage(f"\t  CRS : {layer.crs().authid()}", "AutoUpdateTAXREF")
+    QgsMessageLog.logMessage(f"\t  Géométrie : {layer.wkbType()}", "AutoUpdateTAXREF")
+    QgsMessageLog.logMessage(f"\t  Champs ({layer.fields().count()}) : {[field.name() for field in layer.fields()]}", "AutoUpdateTAXREF")
+    QgsMessageLog.logMessage(f"\t  Nombre d'entités : {layer.featureCount()}", "AutoUpdateTAXREF")
+    
+    for i, feat in enumerate(layer.getFeatures()):
+        QgsMessageLog.logMessage(f"\t  Feature {i} : ID={feat.id()}, Attributs={feat.attributes()}", "AutoUpdateTAXREF")
+        if feat.hasGeometry():
+            QgsMessageLog.logMessage(f"\t  Feature {i} : Géométrie={feat.geometry().asWkt()}", "AutoUpdateTAXREF")
+        if i >= 4:
+            QgsMessageLog.logMessage("\t  … (affichage limité à 5 entités)", "AutoUpdateTAXREF")
+            break
 
 def time_decorator(function):
 
@@ -172,14 +200,45 @@ def gpkg_file_in_project(file_path: str) -> bool:
             return True
     return False
 
+def get_features_to_add(df: pd.DataFrame, layer)->list:
+    
+    print_debug_info(1,0,"get_features_to_add")
+
+    features = []  # Liste des entités à ajouter
+    for _, row in df.iterrows():  # Pour chaque ligne du DataFrame
+        feat = QgsFeature(layer.fields())  # Créer une nouvelle entité avec les champs de la couche
+        for col in df.columns:  # Remplir les valeurs de l'entité avec celles du DataFrame
+            if pd.isna(row[col]):  # Si la valeur est NaN, on laisse la case vide
+                pass
+                #feat[col] = None
+                #feat.setNull(feat.fieldNameIndex(col))  # Marquer l'attribut comme étant nul
+            else:
+                feat[col] = row[col]  # Assigner la valeur non-NaN  # Remplir les valeurs de l'entité avec celles du DataFrame
+        features.append(feat)  # Ajouter l'entité à la liste
+
+    return features
+
+def add_layer_to_map(file_path, uri, layer_name)->None:
+    print_debug_info(1,0,"add_layer_to_map")
+    if gpkg_file_in_project(file_path):
+            reloaded_layer = QgsVectorLayer(uri, layer_name, "ogr")
+            if reloaded_layer.isValid():
+                if QgsProject.instance().addMapLayer(reloaded_layer) == None:
+                    raise Exception(f"QgsProject.instance().addMapLayer(reloaded_layer) failed for {layer_name}")
+
+    return
+
 @time_decorator
 def save_to_gpkg_via_qgs(df: pd.DataFrame,
                          file_path: str,
-                         layer_name: str)->None:
+                         layer_name: str,
+                         debug: int=0)->None:
     """
     Cette fonction enregistre un DataFrame Pandas dans un fichier GeoPackage (.gpkg),
     dans une couche spécifiée. Si la couche existe déjà, elle sera mise à jour. Sinon, elle sera créée.
     """
+
+    print_debug_info(debug , 3, f"Save étape 0 : colonne {df.columns} et nombre de lignes {df.shape[0]}")
 
     # Étape 1 : Créer les champs à partir des colonnes du DataFrame
     fields = QgsFields()  # Crée un objet contenant tous les champs (colonnes)
@@ -196,9 +255,13 @@ def save_to_gpkg_via_qgs(df: pd.DataFrame,
         # Ajouter le champ (colonne) à la liste des champs
         fields.append(QgsField(col, field_type))
 
+    print_debug_info(debug, 3, "save_to_gpkg_via_qgs Etape 1 fin")
+
     # Étape 2 : Vérifier si la couche existe déjà dans le fichier GeoPackage
     uri = f"{file_path}|layername={layer_name}"  # Création de l'URI pour accéder à la couche
     existing_layer = QgsVectorLayer(uri, layer_name, "ogr")  # Chargement de la couche avec le fournisseur "ogr" (pour GeoPackage)
+
+    print_debug_info(debug, 3, "save_to_gpkg_via_qgs Etape 2 fin")
 
     if existing_layer.isValid():  # Si la couche existe et est valide
         # Étape 3 : La couche existe - On met à jour la couche avec les nouvelles données
@@ -207,38 +270,39 @@ def save_to_gpkg_via_qgs(df: pd.DataFrame,
         provider = existing_layer.dataProvider()
 
         # Supprimer toutes les entités (lignes) existantes dans la couche
-        provider.truncate()
+        if not provider.truncate() :
+            raise Exception("provider.truncate failed")
 
         # Ajouter les nouveaux champs (colonnes) si nécessaire
         existing_names = [f.name() for f in provider.fields()]  # Récupère les noms des champs existants
         for field in fields:
             if field.name() not in existing_names:  # Si le champ n'existe pas déjà
-                provider.addAttributes([field])  # Ajouter le champ à la couche
+                if not provider.addAttributes([field]):
+                    raise Exception(f"provider.addAttributes failed for {field.name()}")  # Ajouter le champ à la couche
         existing_layer.updateFields()  # Mettre à jour les champs de la couche
 
         # Ajouter les nouvelles entités (lignes) au fournisseur
-        features = []  # Liste des entités à ajouter
-        for _, row in df.iterrows():  # Pour chaque ligne du DataFrame
-            feat = QgsFeature(existing_layer.fields())  # Créer une nouvelle entité avec les champs de la couche
-            for col in df.columns:  # Remplir les valeurs de l'entité avec celles du DataFrame
-                if pd.isna(row[col]):  # Si la valeur est NaN, on laisse la case vide
-                    feat.setNull(feat.fieldNameIndex(col))  # Marquer l'attribut comme étant nul
-                else:
-                    feat[col] = row[col]  # Assigner la valeur non-NaN  # Remplir les valeurs de l'entité avec celles du DataFrame
-            features.append(feat)  # Ajouter l'entité à la liste
+        features =  get_features_to_add(df, existing_layer)
+
+        print_debug_info(debug, 0, "save_to_gpkg_via_qgs Etape 3 fin")
 
         # Ajouter toutes les entités à la couche
-        provider.addFeatures(features)
+        if not provider.addFeatures(features):
+            raise Exception("provider.addFeatures failed")
+
+        log_features(features)
+        log_layer(existing_layer, title=layer_name)
 
         # Mettre à jour les étendues (bornes géographiques) de la couche
-        existing_layer.updateExtents()
+        if existing_layer.geometryType() != QgsWkbTypes.NoGeometry:
+            existing_layer.updateExtents()
+            #    raise Exception("existing_layer.updateExtents failed")
 
-        if gpkg_file_in_project(file_path):
-            # Recharger la couche mise à jour dans le projet
-            reloaded_layer = QgsVectorLayer(uri, layer_name, "ogr")
-            if reloaded_layer.isValid():
-                QgsProject.instance().removeMapLayer(existing_layer.id())  # Supprimer l'ancienne version
-                QgsProject.instance().addMapLayer(reloaded_layer)
+        add_layer_to_map(file_path, uri, layer_name)
+
+        print_debug_info(debug, 3, "save_to_gpkg_via_qgs Etape 4 fin")
+
+        result = True
 
     else:
         # Étape 4 : La couche n'existe pas - On la crée et on ajoute les données
@@ -252,38 +316,51 @@ def save_to_gpkg_via_qgs(df: pd.DataFrame,
         new_layer.updateFields()  # Mettre à jour les champs de la nouvelle couche
 
         # Ajouter les entités (lignes) du DataFrame à la nouvelle couche
-        features = []  # Liste des entités à ajouter
-        for _, row in df.iterrows():  # Pour chaque ligne du DataFrame
-            feat = QgsFeature(new_layer.fields())  # Créer une nouvelle entité avec les champs de la nouvelle couche
-            for col in df.columns:
-                if pd.isna(row[col]):  # Si la valeur est NaN, on laisse la case vide
-                    feat.setNull(feat.fieldNameIndex(col))  # Marquer l'attribut comme étant nul
-                else:
-                    feat[col] = row[col]  # Assigner la valeur non-NaN  # Remplir les valeurs de l'entité avec celles du DataFrame
-            features.append(feat)  # Ajouter l'entité à la liste
+        features = get_features_to_add(df, new_layer)
+
+        print_debug_info(debug, 3, "save_to_gpkg_via_qgs Etape 3 bis fin")
 
         # Ajouter toutes les entités à la couche
         new_layer_data.addFeatures(features)
 
         # Sauver la couche dans un fichier GeoPackage
-        QgsVectorFileWriter.writeAsVectorFormat(
-            new_layer,                          # La couche à sauvegarder
-            file_path,                           # Le chemin du fichier GeoPackage
-            "utf-8",                             # Encodage des caractères
-            QgsCoordinateReferenceSystem("EPSG:4326"),  # CRS de la couche (utilisé même sans géométrie)
-            "GPKG",                              # Format du fichier (GeoPackage)
-            layerOptions=['OVERWRITE=YES'],      # Options (ici on autorise l'écrasement de la couche si elle existe déjà)
-            layerName=layer_name                # Nom de la couche
-        )
+        options = QgsVectorFileWriter.SaveVectorOptions()
+        options.driverName = "GPKG"
+        options.layerName = layer_name
+        options.fileEncoding = "utf-8"
+        options.actionOnExistingFile = QgsVectorFileWriter.CreateOrOverwriteLayer
+
+        transform_context = QgsProject.instance().transformContext()
+
+        out_writer = QgsVectorFileWriter.writeAsVectorFormatV3(
+            new_layer,
+            file_path,
+            transform_context,
+            options)
+        
+        result = out_writer[0]
+        error = out_writer[1]
+
+        if error != QgsVectorFileWriter.NoError:
+            raise RuntimeError(f"Erreur lors de la sauvegarde de la couche : {error}")
+            
+        """error, context = QgsVectorFileWriter.writeAsVectorFormatV2(
+            new_layer,
+            file_path,
+            QgsCoordinateReferenceSystem("EPSG:4326"),
+            QgsVectorFileWriter.SaveVectorOptions(
+                actionOnExistingFile=QgsVectorFileWriter.CreateOrOverwriteLayer,
+                layerName=layer_name,
+                driverName="GPKG",
+                fileEncoding="utf-8"))"""
 
         # Recharger et ajouter la couche au projet
-        if gpkg_file_in_project(file_path):
-            new_layer_uri = f"{file_path}|layername={layer_name}"
-            reloaded_layer = QgsVectorLayer(new_layer_uri, layer_name, "ogr")
-            if reloaded_layer.isValid():
-                QgsProject.instance().addMapLayer(reloaded_layer)
+        new_layer_uri = f"{file_path}|layername={layer_name}"
+        add_layer_to_map(file_path, new_layer_uri, layer_name)
 
-    return
+        print_debug_info(debug, 3, "save_to_gpkg_via_qgs Etape 4 bis fin")
+
+    return result
 
 def save_decorator(savior) :
 
@@ -292,7 +369,7 @@ def save_decorator(savior) :
         def wrapper(*args, **kwargs)->None:
 
             df, file_path, layername = function(*args, **kwargs)
-            savior(df, filepath=file_path, layername=layername)
+            savior(df, file_path, layername=layername)
 
             return
         
