@@ -165,6 +165,9 @@ class UpdateController(QThread):
             if self.status_dialog.user_response:
                 self.local_status_types = get_status_types_from_ids(list(self.status_dialog.selected_statuses))
                 self.ask_save_excel()
+            if self.status_dialog.dont_ask_again:
+                self.excel_folder = ""
+                self.save_excel = False
 
     def search_for_update(self):
         """

@@ -4,7 +4,7 @@ import pandas as pd
 
 from .utils import (print_debug_info, save_dataframe, save_to_gpkg_via_qgs,
                     list_layers_from_gpkg, list_layers_from_qgis, load_layer_as_dataframe,
-                    save_decorator)
+                    save_decorator, parse_layer_to_dataframe, load_layer)
 
 from datetime import date
 
@@ -31,14 +31,12 @@ class SourcesManager():
         # Si le fichier existe, lire les sources existantes
         if os.path.isfile(self.path):
             print_debug_info(self.debug, 1, f"{self.check_update_status.__name__} : cherche available_layer")
-   
-            # Liste des couches disponibles dans le fichier GPKG
-            available_layers = list_layers_from_qgis(self.path)
 
-            # Si la couche "Source" existe, lire les données dans un DataFrame
-            if self.layer_name in available_layers :
-                self.data_sources = load_layer_as_dataframe(self.path, layer_name=self.layer_name)
-        
+            layer = load_layer(self.path, self.layer_name)
+            if layer.isValid():
+                # Si la couche "Sources" existe, lire les données dans un DataFrame
+                self.data_sources = parse_layer_to_dataframe(layer=layer)
+                
         else :
             self.data_sources = pd.DataFrame(columns=self.required_columns)
 

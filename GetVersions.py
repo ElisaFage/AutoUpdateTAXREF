@@ -53,8 +53,15 @@ class VersionManager():
                     #gpd.read_file(file_path, layer=layer_name)
                     # Ajouter la version minimale ou -1 si la colonne "VERSION" est absente
                     if "VERSION" in data.columns and not data["VERSION"].empty:
-                        version_values = data["VERSION"].fillna(-1).values
-                        all_versions.append(np.min(version_values))
+                        # Nettoyer les valeurs potentiellement invalides (ex : QVariant)
+                        cleaned = data["VERSION"].apply(lambda x: str(x) if x is not None else None)
+                        # Convertir en numérique avec gestion des erreurs
+                        version_series = pd.to_numeric(cleaned, errors="coerce")
+                        # Remplacer les NaN par -1 (ou une autre valeur selon votre logique)
+                        version_series = version_series.fillna(-1)
+                        # Convertir vers un type entier tolérant les NaN
+                        version_series = version_series.astype("Int64")  # type nullable de pandas
+                        all_versions.append(version_series.min() if not version_series.empty else -1)
                     else:
                         all_versions.append(-1)
             

@@ -127,7 +127,7 @@ def save_global_status(status_df: pd.DataFrame,
         bird_col = [LISTE_ROUGE_NATIONALE.type_id] if taxon_title == OISEAUX.title else []
     else:
         raise ValueError(f"save_type should be either \"{national_value}\" or \"{regional_value}\" but is : {save_type}")
-    
+
     # Si une couche existe déjà, on la lit et prépare une fusion avec les nouvelles données
     if layer_name in available_layers :#["name"].values:
         print_debug_info(debug, 3, f"{layer_name} in {available_layers}")
@@ -172,6 +172,7 @@ def save_global_status(status_df: pd.DataFrame,
             status_na_dropped = status_df.dropna(axis=1, how="all")
 
     else:
+        print_debug_info(debug, 3, f"{layer_name} not in {available_layers}")
         # Si aucune couche existante, on nettoie juste les colonnes vides (axis=1)
         status_na_dropped = status_df.dropna(axis=1, how="all")
 
@@ -183,6 +184,6 @@ def save_global_status(status_df: pd.DataFrame,
     print_debug_info(debug, 3, f"Pour {taxon_title} : les colonnes après reordonnancement sont {status_to_save.columns}")
         
     # Convertit le DataFrame en GeoDataFrame et sauvegarde dans le fichier GeoPackage
-    save_to_gpkg_via_qgs(status_to_save, file_save_path, layer_name)
+    save_to_gpkg_via_qgs(status_to_save, file_save_path, layer_name, debug=debug)
 
     return
