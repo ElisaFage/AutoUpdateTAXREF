@@ -200,10 +200,13 @@ class AutoUpdateTAXREF :
         QTimer.singleShot(0, self.on_project_fully_loaded)
 
     def on_project_fully_loaded(self):
-        
+        """
+        Récupère le répertoire du projet chargé.
+        Instancie le controlleur
+        """
         project_path = os.path.dirname(QgsProject.instance().fileName())
         self.update_controller = UpdateController(
             project_path=project_path,
-            debug=4)
+            debug=3)
 
     

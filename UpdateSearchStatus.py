@@ -14,7 +14,17 @@ class SourcesManager():
     required_columns = ["id", "fullCitation"]
 
     def __init__(self, path: str, new_version: bool=False, year:int=None, debug: int=0):
-    
+        """
+        Initialisation de l'instance de SourceManager
+        
+        :param:
+        path (str): chemin absolu du fichier Données.gpkg dans le dossier du projet en question
+        new_version (bool): booléen indiquant si une nouvelle version de taxref est disponible
+        year (int): année pour chercher les sources
+        debug (int): niveau de debug  
+        """
+
+
         self.path = path
         self.new_version = new_version
 
@@ -28,6 +38,10 @@ class SourcesManager():
         self.layer_name = "Sources"
 
     def set_data_sources(self):
+        """
+        Récupère les sources associées aux fichier Données.gpkg
+        """
+
         # Si le fichier existe, lire les sources existantes
         if os.path.isfile(self.path):
             print_debug_info(self.debug, 1, f"{self.check_update_status.__name__} : cherche available_layer")
@@ -35,14 +49,17 @@ class SourcesManager():
             layer = load_layer(self.path, self.layer_name)
             if layer.isValid():
                 # Si la couche "Sources" existe, lire les données dans un DataFrame
-                self.data_sources = parse_layer_to_dataframe(layer=layer)
-                
+                self.data_sources = parse_layer_to_dataframe(layer=layer) 
         else :
             self.data_sources = pd.DataFrame(columns=self.required_columns)
 
         return
 
     def get_new_sources_list(self)->list:
+        """"
+        Renvoie une liste de toutes les fullCitation des nouvelles sources
+        """
+
         text_lines = self.new_sources["fullCitation"].to_list()
         return text_lines
 
@@ -71,12 +88,13 @@ class SourcesManager():
 
         # Extraire et normaliser les données des sources bibliographiques
         sources_list = data_json.get('_embedded', {}).get('bibliography', [])
+        # Conversion du json en pd.DataFrame
         df_sources = pd.json_normalize(sources_list, sep = '_')
 
         # Filtrage des sources contenant des termes spécifiques dans la citation
         listDiscriminant = ["Liste Rouge", "Arrêté", "Directive", "Plan national", "Règlement d'exécution", "ZNIEFF", "ZNIEFFS"]
         df_sources = df_sources[df_sources["fullCitation"].apply(
-            lambda x: any(substring.lower() in x.lower() for substring in listDiscriminant) if isinstance(x, str) else False)]
+            lambda fullCitation: any(substring.lower() in fullCitation.lower() for substring in listDiscriminant) if isinstance(fullCitation, str) else False)]
         
         return df_sources
 
@@ -104,24 +122,24 @@ class SourcesManager():
         # Retourner les sources absentes sous forme de DataFrame
         return ids_absents
 
-    # Chreche s'il y a de nouvelles source pour faire une mise à jour
+    # Cherche s'il y a des nouvelles sources pour faire une mise à jour
     def check_update_status(self)->pd.DataFrame:
         """
         Vérifie s'il y a des nouvelles sources pour effectuer une mise à jour.
 
-        Cette fonction recherche les nouvelles sources dans un fichier géospatial "Autre.gpkg"
+        Cette fonction recherche les nouvelles sources dans un fichier géospatial "Donnees.gpkg"
         et compare les sources existantes avec celles des deux dernières années (l'année en cours et l'année précédente).
         Si de nouvelles sources sont trouvées, elles sont retournées sous forme de DataFrame.
 
         Args:
-            path (str): Le chemin vers le répertoire contenant le fichier "Autre.gpkg".
+            path (str): Le chemin vers le répertoire contenant le fichier "Donnees.gpkg".
             debug (int, optional): Niveau de débogage pour l'affichage des logs (par défaut 0, 1 ou 2).
 
         Returns:
             pd.DataFrame: Un DataFrame contenant les nouvelles sources à ajouter.
         """
 
-        # Si le fichier existe, lire les sources existantes
+        # Si le fichier existe, lire les sources existantes dans le fichier "Donnees.gpkg"
         self.set_data_sources()
             
         # Récupérer les sources de l'année en cours et de l'année précédente
@@ -186,3 +204,14 @@ class SourcesManager():
         save_to_gpkg_via_qgs(self.data_sources, self.path, self.layer_name)
 
         return 
+    
+    def is_new_sources(self):
+        """
+        Verifie s'il y a des nouvelles sources dans new_sources
+
+        :return:
+        bool : True si new_sources n'est pas vide
+               False si new_sources est vide
+        """
+
+        return not self.new_sources.empty

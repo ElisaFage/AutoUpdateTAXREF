@@ -30,24 +30,20 @@ class ProgressionWindow(QWidget):
     version = None
 
     def __init__(self,
-                 total_steps: int,
-                 debug: int = 0):
+                 total_steps: int):
         """
         Initialise la fenêtre de téléchargement de TAXREF.
 
-        :param new_version (bool): Indique si une nouvelle version doit être téléchargée.
-        :param new_status (bool): Indique si les statuts doivent être mis à jour.
-        :param debug (int): Niveau de débogage.
+        :param total_steps (bool): Donne le nombre d'étapes et donc le nombre de portions de barre de chargement.
         """
         super().__init__()
 
         # Définition des paramètres
-        self.debug = debug
-
         # Compteurs et suivi d'étapes
         self.current_step = 0
         self.total_steps = total_steps
 
+        # Interface graphique
         self._setup_ui()
 
     def _setup_ui(self):
@@ -75,6 +71,13 @@ class ProgressionWindow(QWidget):
         layout.addWidget(self.cancel_button)
 
         self.setLayout(layout)
+        
+    def closeEvent(self, event):
+        """
+        Intercepte la fermeture de la fenêtre via la croix et appelle cancel_process.
+        """
+        self.cancel_process()  # Appelle ta méthode d’annulation
+        event.accept()  # Accepte la fermeture de la fenêtre
 
     def cancel_process(self):
         """

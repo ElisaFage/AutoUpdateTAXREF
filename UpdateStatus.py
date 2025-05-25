@@ -22,41 +22,52 @@ from .statustype import (StatusType, STATUS_TYPES,
                           DETERMINANT_ZNIEFF, DIRECTIVE_HABITAT, DIRECTIVE_OISEAUX)
 
 # Supprime les lignes non nécessaires dans le pandas dataframe
-def filter_by_cd_ref(df_concat: pd.DataFrame, taxons: List[TaxonGroupe], path: str) -> pd.DataFrame:
+def filter_by_domtom(df_concat: pd.DataFrame) -> pd.DataFrame:
     """
-    Filtre les données en fonction des références taxonomiques et exclut les enregistrements hors DOM-TOM.
+    Filtre les données en excluant les enregistrements hors DOM-TOM.
 
     Args:
         df_concat (pd.DataFrame): Le DataFrame concaténé contenant les données taxonomiques à filtrer.
-        taxonTitles (List[TaxonGroupe]): Liste des titres des taxons à traiter (ex. "Flore", "Faune").
-        path (str): Le chemin d'accès au répertoire contenant les fichiers GPKG.
 
     Returns:
-        dict: Un dictionnaire avec les titres de taxons comme clés et les DataFrames filtrés comme valeurs.
+        dict: un DataFrames filtrés.
     """
 
     # Liste des DOM-TOM à exclure
     domtom = ["Guadeloupe", "Guyane", "Martinique", "Réunion", "Mayotte"]
+    # Exclure les lignes correspondant à des localisations dans les DOM-TOM
+    return df_concat[~df_concat["locationName"].isin(domtom)]
+
+def filter_by_cd_ref(df_concat: pd.DataFrame,
+                     taxons: List[TaxonGroupe],
+                     path: str)-> dict[str, pd.DataFrame]:
+    """
+    Filtre les données en fonction des références taxonomiques.
+
+    Args:
+        df_concat (pd.DataFrame): Le DataFrame concaténé contenant les données taxonomiques à filtrer.
+        taxons (List[TaxonGroupe]): liste des taxons
+        path (str): chemin du dossier avec le fichier Statuts.gpkg contenant les couches Liste
+    Returns:
+        dict: Un dictionnaire avec les titres de taxons comme clés et les DataFrames filtrés comme valeurs.
+    """
 
     # Filtrer les lignes où 'taxon_referenceId' correspond à 'taxon_id'
     df_concat = df_concat[df_concat['taxon_referenceId'].astype(int) == df_concat["taxon_id"].astype(int)]
     # Charger les fichiers GPKG pour chaque titre une seule fois et les stocker dans un dictionnaire
     
-    file_path = get_file_save_path(path)
     dict_df_out = {}
     for taxon in taxons:
         # Définir le chemin du fichier GPKG en fonction du titre du taxon
-        
+        file_path = get_file_save_path(path)
         # Charger le fichier GPKG dans un DataFrame et stocker dans le dictionnaire
         df_ref = load_layer_as_dataframe(file_path, f"Liste {taxon.title}")
         #pd.DataFrame(gpd.read_file(file_path, layer=f"Liste {title}"))
 
         # Filtrer df_concat pour ne conserver que les lignes dont 'taxon_referenceId' est dans 'CD_REF'
         df_out = df_concat[df_concat['taxon_referenceId'].astype(int).isin(df_ref['CD_REF'].astype(int).values)]
-        # Exclure les lignes correspondant à des localisations dans les DOM-TOM
-        status_no_domtom = df_out[~df_out["locationName"].isin(domtom)]
         # Stocker le DataFrame filtré dans le dictionnaire
-        dict_df_out[taxon.title] = status_no_domtom
+        dict_df_out[taxon.title] = df_out
 
     return dict_df_out
 
@@ -149,7 +160,8 @@ def reorganize_columns_and_codes(status_data_in: pd.DataFrame,
     """
 
     # Colonnes à garder pour traiter les statuts
-    columns_to_keep = ["taxon_referenceId", "statusCode",
+    columns_to_keep = ["taxon_referenceId", "taxon_scientificName",
+                       "statusCode",
                        "source", "sourceId",
                        "locationName", "locationAdminLevel",
                        "statusRemarks", "statusName"]
@@ -161,11 +173,11 @@ def reorganize_columns_and_codes(status_data_in: pd.DataFrame,
         "source": f"source_{status.type_id}",
         "sourceId": f"sourceId_{status.type_id}"}
     
-    # Suppréssion des colonnes inutiles
+    # Suppression des colonnes inutiles
     status_column_reduced = status_data_in[columns_to_keep]
 
-    # Réccupération des status_code pour la colonne statusCode
-    newlist = status_column_reduced.apply(lambda x: extract_status_code(x, status, taxon_title, oiseaux_keywords), axis=1)
+    # Récupération des status_code pour la colonne statusCode
+    newlist = status_column_reduced.apply(lambda row: extract_status_code(row, status, taxon_title, oiseaux_keywords), axis=1)
     status_column_reduced.loc[:, "statusCode"] = newlist
 
     # Renommer les colonnes
@@ -243,13 +255,10 @@ def do_save_excel(save_excel: bool,
         filename = f'{locName.title().replace(" ", "")}_{status.type_id}_{taxon_title}.csv'
         csv_path = os.path.join(folder_excel, filename)
 
-        # Fusion avec l'ancien fichier s'il existe
+        # Supprime l'ancien fichier s'il existe
         if os.path.isfile(csv_path):
-            old_csv = pd.read_csv(csv_path)
-            new_csv = pd.concat([old_csv, status_data[condition_location_name]], ignore_index=True).drop_duplicates()
-            new_csv.to_csv(csv_path, index=False)
-        else:
-            status_data[condition_location_name].to_csv(csv_path, index=False)
+            os.remove(csv_path)
+        status_data[condition_location_name].to_csv(csv_path, sep=";", encoding="utf-8", index=False)
 
     return
 
@@ -276,6 +285,7 @@ def generate_status_by_level(df: pd.DataFrame, level_name: str,
     """
 
     result = []
+    columns_to_drop = ["locationName", "locationAdminLevel", "statusRemarks", "statusName", "taxon_scientificName"]
 
     # Vérification si le statusId n'appartient pas aux statuts particuliers
     if not status.is_national():
@@ -292,8 +302,8 @@ def generate_status_by_level(df: pd.DataFrame, level_name: str,
             # Effectuer l'assignation et la transformation uniquement sur le sous-ensemble filtré
             temp_df = (filtered_df
                 .assign(**{"Région" : region})
-                .assign(agg_region_cdref=lambda x: x["Région"] + x["CD_REF"].astype(str))
-                .drop(columns=["locationName", "locationAdminLevel", "statusRemarks", "statusName"])
+                .assign(agg_region_cdref=lambda row: row["Région"] + row["CD_REF"].astype(str))
+                .drop(columns=columns_to_drop)
                 .groupby(["Région", "CD_REF"], as_index=False)
                 .agg(lambdafunc_dict))
 
@@ -310,7 +320,7 @@ def generate_status_by_level(df: pd.DataFrame, level_name: str,
 
         # Effectuer l'assignation et la transformation uniquement sur le sous-ensemble filtré
         temp_df = (filtered_df
-            .drop(columns=["locationName", "locationAdminLevel", "statusRemarks", "statusName"])
+            .drop(columns=columns_to_drop)
             .groupby(["CD_REF"], as_index=False)
             .agg(lambdafunc_dict))
 
@@ -445,11 +455,11 @@ def modifier_statuts_specifiques(status: StatusType,
     if (status == LISTE_ROUGE_NATIONALE) and (OISEAUX.title in taxon_title) :
         for keyword in oiseaux_keywords:
             col_name = f"{status.type_id} - {keyword}"
-            status_data_in[col_name] = status_data_in[LISTE_ROUGE_NATIONALE.type_id].apply(lambda x: filter_by_keyword(x, keyword))
+            status_data_in[col_name] = status_data_in[LISTE_ROUGE_NATIONALE.type_id].apply(lambda row: filter_by_keyword(row, keyword))
     
     # Modifier la colonne des status REGLLUTTE
     elif (status == LUTTE_CONTRE_ESPECES) :
-        status_data_in[status.type_id] = status_data_in[status.type_id].apply(lambda x: x.replace(" : ", " - "))
+        status_data_in[status.type_id] = status_data_in[status.type_id].apply(lambda row: row.replace(" : ", " - "))
 
     # Passer les élements de la colonne CD_REF en string plutot qu'en int
     status_data_in['CD_REF'] = status_data_in['CD_REF'].astype(int)
@@ -513,7 +523,8 @@ def make_status_array(status: StatusType,
 
     return status_array_out
 
-def get_all_status_type():
+# Récupère les types de statut de l'API
+def get_all_status_type()->list:
     
     url = "https://taxref.mnhn.fr/api/status/types"
 
@@ -533,7 +544,7 @@ def download_status(status: StatusType,
                  path: str,
                  save_excel: bool,
                  folder_excel: str,
-                 debug: int=0):
+                 debug: int=0)->dict[str, pd.DataFrame]:
     
     """
     Télécharge les statuts depuis l'API TAXREF en fonction d'un identifiant de statut,
@@ -541,9 +552,9 @@ def download_status(status: StatusType,
 
     Parameters
     ----------
-    status_id : str
+    status : StatusType
         Identifiant du type de statut à récupérer (ex : "LRN", "REGLLUTTE").
-    taxon_titles : list
+    taxon_titles : Liste[TaxonGroupe]
         Liste des titres de groupes taxonomiques à filtrer (ex : ["Oiseaux", "Mammifères"]).
     path : str
         Chemin vers le dossier contenant les fichiers de référence (CD_REF).
@@ -594,16 +605,16 @@ def download_status(status: StatusType,
         df_page["taxon_referenceId"] = df_page["taxon_referenceId"].astype(str)
 
         # Filtrer les statuts en fonction des taxons définis par CD_REF
-        dict_df_filter = filter_by_cd_ref(df_page, taxons, path)
+        dict_df_filter = filter_by_cd_ref(filter_by_domtom(df_page), taxons, path)
 
         # Générer les tableaux par taxon si des données sont présentes  
-        for key in dict_df_filter:
+        for taxon_name in dict_df_filter:
             
-            if len(dict_df_filter[key]) != 0:
-                dict_make_array_out[key].append(
+            if len(dict_df_filter[taxon_name]) != 0:
+                dict_make_array_out[taxon_name].append(
                     make_status_array(
-                        status, key,
-                        dict_df_filter[key],
+                        status, taxon_name,
+                        dict_df_filter[taxon_name],
                         save_excel,
                         folder_excel,
                         debug=debug))
@@ -705,11 +716,13 @@ def run_download_status(status: StatusType,
         Liste des chemins vers les fichiers GeoPackage générés.
     """
 
+    # Cherche tous les statuts existants dans l'api taxref
     list_all_status_type_ids = get_all_status_type()
+    # Dis si la variable status est parmis ceux dans l'api
     status.set_in_api(bool_val = (status.type_id in list_all_status_type_ids))
-    if  status.in_api :
+    if  status.is_in_api() :
 
-        # Télécharger les données de statu
+        # Télécharger les données de status
         dict_make_array_out = download_status(status,
                                               taxons,
                                               path,

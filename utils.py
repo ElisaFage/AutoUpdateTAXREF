@@ -146,20 +146,43 @@ def list_layer_from_gpd(filepath: str):
     return layers
 
 def parse_layer_to_dataframe(layer)->pd.DataFrame:
+    """
+    Parse une layer pour en faire un pd.DataFrame
+
+    :param:
+    layer (QgsVectorLayer): couche QGIS à parser
+
+    :return:
+    df (pd.DataFrame): dataframe associé à la couche vectroriel
+    """
 
     data = []
+    # Passe en revue les lignes de layer
     for feature in layer.getFeatures():
+        # Récupère une collection d'attributs (élements de la lignes)
         attrs = feature.attributes()
         data.append(attrs)
 
     # Récupérer les noms de champs
     fields = [field.name() for field in layer.fields()]
 
+    # Crée un dataframe à partir des fileds (colonnes) et des données
     df = pd.DataFrame(data, columns=fields)
 
     return df
 
 def load_layer(filepath: str, layer_name: str):
+
+    """
+    Charge une couche depuis un fichier gpkg avec les fonctions qgis
+    
+    :param:
+    filepath (str): chemin absolu du fichier
+    layer_name (str): nom de la coucher cherché
+
+    :return:
+    layer (QgsVectorLayer): Couche de sortie
+    """
 
     uri = f"{filepath}|layername={layer_name}".lower()
     layer = QgsVectorLayer(uri, layer_name, "ogr")

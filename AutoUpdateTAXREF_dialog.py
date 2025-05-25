@@ -60,7 +60,7 @@ class AutoUpdateTAXREFDialog(QtWidgets.QDialog, FORM_CLASS):
 
         all_taxon_titles = [taxon.title for taxon in TAXONS]
         self.taxon_titles = [taxon.title for taxon in taxons] if taxons != None else []
-        self.selected_taxons = set(self.taxon_titles)   # Contient les taxons selectionnés
+        self.selected_taxons = set(self.taxon_titles) # Contient les taxons selectionnés
 
         self.status_names = status_names
         self.selected_statuses = set(status_names) # Contient les statuts sélectionnés
@@ -125,7 +125,7 @@ class AutoUpdateTAXREFDialog(QtWidgets.QDialog, FORM_CLASS):
                 taxon_checkbox = QCheckBox(taxon)
                 taxon_in_data = taxon in self.taxon_titles
                 taxon_checkbox.setChecked(taxon_in_data)  # Coché par défaut
-                taxon_checkbox.setEnabled(True)  # Rendre cochable les case
+                taxon_checkbox.setEnabled(True)  # Rendre cochable les cases
                 taxon_checkbox.stateChanged.connect(self.on_taxon_checkbox_changed)
                 self.taxon_checkboxes[taxon_checkbox] = taxon
                 taxon_checkbox_layout.addWidget(taxon_checkbox, i // 2, i % 2)  # Deux colonnes

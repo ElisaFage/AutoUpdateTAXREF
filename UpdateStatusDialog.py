@@ -15,12 +15,11 @@ class UpdateTAXREFDialog(QDialog):
 
         # Variables internes de réponse utilisateur
         self.user_response = False  # False pour "Non" par défaut
-        self.dont_ask_again = False
 
         # Layout principal
         layout = QVBoxLayout()
 
-        self.text = QLabel(f'Une nouvelle version de TAXREF (version {version}) est disponible.\nVoulez vous mettre TAXREF à jour ?')
+        self.text = QLabel(f'Une nouvelle version de TAXREF (version {version}) est disponible.\nVoulez vous mettre vos données à jour ?')
         layout.addWidget(self.text)
 
         # Boutons Oui et Non
@@ -232,7 +231,7 @@ class UpdateStatusDialog(QDialog):
 class SaveXlsxDialog(QDialog):
     """
     Boîte de dialogue simple demandant à l'utilisateur s'il souhaite sauvegarder
-    les listes de statuts au format CSV/Excel.
+    les listes de statuts au format CSV.
 
     Attributs :
         user_response (bool) : Réponse de l'utilisateur (True si "Oui", False sinon).
@@ -253,8 +252,8 @@ class SaveXlsxDialog(QDialog):
 
         # Texte déroulant avec contenu configurable
         intro_text = "Souhaitez-vous enregistrer les listes de chaque statut au format CSV ?"
-        self.scrollable_text = QTextEdit(intro_text)
-        layout.addWidget(self.scrollable_text)
+        self.label = QLabel(intro_text)
+        layout.addWidget(self.label)
 
         # Boutons Oui et Non
         # Crée un layout pour les boutons

@@ -14,11 +14,21 @@ from .taxongroupe import TaxonGroupe
 class VersionManager():
 
     def __init__(self, path:str, taxons: list[TaxonGroupe], debug: int=0):
-        
+        """
+        Initialisation d'une instance de VersionManager
+
+        :param:
+        path (str) : chemin du dossier contenant Statuts.gpkg du projet en question
+        taxons (list[TaxonGroupe]) : liste de tous les taxons intéressants pour le projet
+        debug (int) : niveau de debug
+        """
+
         self.taxons = taxons
         self.path = path
         self.debug = debug
+        # Version qui sera associée aux données de Statuts.gpkg
         self.data_version = -1
+        # Dernière version sur l'API TAXREF
         self.current_version = -1
 
         self.url = "https://taxref.mnhn.fr/api/taxrefVersions/current"
@@ -46,11 +56,9 @@ class VersionManager():
             # Parcours de chaque catégorie de taxon
             for taxon in self.taxons:
                 layer_name = f"Liste {taxon.title}"
-                #gpd.list_layers(self.path)
                 
-                if layer_name in available_layers: #["name"].values:
+                if layer_name in available_layers: 
                     data = load_layer_as_dataframe(file_path, layer_name=layer_name)
-                    #gpd.read_file(file_path, layer=layer_name)
                     # Ajouter la version minimale ou -1 si la colonne "VERSION" est absente
                     if "VERSION" in data.columns and not data["VERSION"].empty:
                         # Nettoyer les valeurs potentiellement invalides (ex : QVariant)
@@ -88,4 +96,19 @@ class VersionManager():
         self.current_version = data_json["id"]
         print_debug_info(self.debug, 0, f"Dernière version: {self.current_version}")
 
+        return
+
+    def issame_versions(self):
+        """
+        Compare la version locale et la dernière version en ligne
+        
+        :return:
+        bool : True si les deux versions sont les mêmes
+               False si les deux versions sont différentes
+        """
+
+        return self.data_version == self.current_version
+
+    def set_taxons(self, taxons: list[TaxonGroupe]):
+        self.taxons = taxons
         return

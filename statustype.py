@@ -22,7 +22,7 @@ class StatusType():
     def is_regional(self):
         return not self.is_national()
     
-    def is_in_api(self):
+    def search_in_api(self):
         
         response = requests.get(self.types_url)
         data_json = response.json()
@@ -35,9 +35,12 @@ class StatusType():
     
     def set_in_api(self, bool_val: bool=None):
         if bool_val == None :
-            self.in_api = self.is_in_api()
+            self.in_api = self.search_in_api()
         else :
             self.in_api = bool_val
+
+    def is_in_api(self):
+        return self.in_api
 
 DIRECTIVE_HABITAT = StatusType(**{"type_id": "DH",
                      "name": "Directive Habitat",

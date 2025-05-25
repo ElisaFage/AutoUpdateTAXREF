@@ -272,8 +272,10 @@ def get_taxon_titles(path:str, prefix: str=None)->list[str]:
         return available_layers
 
     print_debug_info(1,0,f"available_layers : {available_layers}")
+    # Récupère les taxons après le préfix
     taxon_titles = [taxon.split(" ")[-1] for taxon in available_layers if taxon.startswith(prefix)]
     print_debug_info(1,0,f"taxon_titles : {taxon_titles}")
+    # Récupère les titres correspondant à des titres de groupes de taxons 
     real_taxon_titles = [title for title in taxon_titles if title in TAXON_TITLES]
     #print_debug_info(1,0,f"real_taxon_titles : {real_taxon_titles}")
     return real_taxon_titles

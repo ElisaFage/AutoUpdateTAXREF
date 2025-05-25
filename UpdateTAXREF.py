@@ -117,10 +117,10 @@ def supprime_nom_vernaculaire(df:pd.DataFrame, taxon:TaxonGroupe)->pd.DataFrame:
     """
     
     # Définition des couches pour lesquelles le nettoyage des noms vernaculaires s'applique
-    taxon_specifique = (AMPHIBIENS, REPTILES, OISEAUX, MAMMIFERES)
+    taxons_specifiques = (AMPHIBIENS, REPTILES, OISEAUX, MAMMIFERES)
 
     # Vérifier si la couche est dans la liste des couches définies
-    if taxon in taxon_specifique:
+    if taxon in taxons_specifiques:
         # Supprimer les lignes où la colonne 'NOM_VERN' a des valeurs manquantes
         df.dropna(subset=["NOM_VERN"], inplace=True)
         # Grouper par 'NOM_VERN' et appliquer la logique pour sélectionner la ligne avec le nom valide le plus court

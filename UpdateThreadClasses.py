@@ -304,13 +304,23 @@ class GetStatusThread(QThread):
                 self.merge_and_save(taxon, national_status_ids_in_use, ["CD_REF"], "national")
 
             print_debug_info(self.debug, 0, f"Cleanup for {taxon.title}")
-            # Nettoyage des fichiers temporaires
+
+        self.delete_temporary_files()
+
+        print_debug_info(self.debug, 0, "End of savings")
+
+    def delete_temporary_files(self):
+        """
+        Supprime les fichiers temporaires
+        """
+
+        for taxon in self.taxons:
             for status in self.status_types:
                 path = os.path.join(self.path, f"{taxon.title}_{status.type_id}.gpkg")
-                if status.in_api and os.path.isfile(path) :
+                if os.path.isfile(path):
                     os.remove(path)
-                
-        print_debug_info(self.debug, 0, "End of savings")
+
+        return
 
     def termination_process(self):
         """
@@ -320,11 +330,7 @@ class GetStatusThread(QThread):
         Elle supprime les fichiers temporaires générés pendant le processus.
         """
 
-        # Supprime les fichier temporaire
-        if self.pathes_temp_file :
-            for path in self.pathes_temp_file:
-                if os.path.isfile(path):
-                    os.remove(path)
+        self.delete_temporary_files()
         
         # Termine le thread de force
         self.terminate()

@@ -4,9 +4,19 @@ import pandas as pd
 from .utils import (save_dataframe, save_to_gpkg_via_qgs, 
                     print_debug_info, get_file_save_path,
                     list_layers_from_gpkg, list_layers_from_qgis,
-                    load_layer_as_dataframe)
+                    load_layer_as_dataframe, load_layer, parse_layer_to_dataframe)
 from .taxongroupe import (OISEAUX)
-from .statustype import (LISTE_ROUGE_NATIONALE)
+from .statustype import (LISTE_ROUGE_NATIONALE,
+                         LISTE_ROUGE_REGIONALE,
+                         DIRECTIVE_HABITAT,
+                         DIRECTIVE_OISEAUX,
+                         PRIORITE_ACTION_PUBLIQUE_NATIONALE,
+                         PROTECTION_DEPARTEMENTALE,
+                         PROTECTION_NATIONALE,
+                         PROTECTION_REGIONALE,
+                         PLAN_NATIONAL_ACTION,
+                         LUTTE_CONTRE_ESPECES,
+                         DETERMINANT_ZNIEFF)
 
 def reorder_columns(df: pd.DataFrame)->pd.DataFrame:
     """
@@ -30,7 +40,12 @@ def reorder_columns(df: pd.DataFrame)->pd.DataFrame:
     """
 
     # Liste des statusId à rechercher dans les colonnes
-    status_ids = ["DH", "DO", "PN", "PR", "PD", "LRN", "LRR", "PNA", "PAPNAT", "ZDET", "REGLLUTTE"]
+    status_ids = [DIRECTIVE_HABITAT.type_id, DIRECTIVE_OISEAUX.type_id,
+                  PROTECTION_NATIONALE.type_id, PROTECTION_REGIONALE.type_id,
+                  PROTECTION_DEPARTEMENTALE.type_id,
+                  LISTE_ROUGE_NATIONALE.type_id, LISTE_ROUGE_REGIONALE.type_id,
+                  PLAN_NATIONAL_ACTION.type_id, PRIORITE_ACTION_PUBLIQUE_NATIONALE.type_id,
+                  DETERMINANT_ZNIEFF.type_id, LUTTE_CONTRE_ESPECES.type_id]
 
     # Créer des groupes
     base_group = []  # Colonnes qui ne contiennent aucun statusId
@@ -55,13 +70,12 @@ def reorder_columns(df: pd.DataFrame)->pd.DataFrame:
         # Ordre dans chaque groupe : statusId, source_statusId, sourceID_statusId
         ordered_columns += sorted(
             grouped_columns[status],
-            key=lambda x: (
-                x == status,  # "statusId" prioritaire
-                x.startswith("sourceId"),  # Puis "sourceID_statusId"
-                x.startswith("source")  # Enfin "source_statusId"
+            key=lambda col: (
+                col == status,  # "statusId" prioritaire
+                col.startswith("sourceId"),  # Puis "sourceID_statusId"
+                col.startswith("source")  # Enfin "source_statusId"
             ),
-            reverse=True
-        )
+            reverse=True)
 
     return df[ordered_columns]
 
@@ -111,10 +125,6 @@ def save_global_status(status_df: pd.DataFrame,
     # Construction du chemin vers le fichier GeoPackage
     file_save_path = get_file_save_path(path, taxon_title)
 
-    # Liste des couches déjà présentes dans le fichier
-    available_layers =  list_layers_from_qgis(file_save_path)
-    #gpd.list_layers(file_save_path)
-
     # Choix du nom de la couche et configuration spécifique selon le type de sauvegarde
     if save_type == regional_value:
         layer_name = f"Statuts {taxon_title}"
@@ -128,10 +138,12 @@ def save_global_status(status_df: pd.DataFrame,
     else:
         raise ValueError(f"save_type should be either \"{national_value}\" or \"{regional_value}\" but is : {save_type}")
 
+    layer = load_layer(file_save_path, layer_name)
     # Si une couche existe déjà, on la lit et prépare une fusion avec les nouvelles données
-    if layer_name in available_layers :#["name"].values:
-        print_debug_info(debug, 3, f"{layer_name} in {available_layers}")
-        old_file = load_layer_as_dataframe(file_save_path, layer_name=layer_name)
+    if layer.isValid() :#["name"].values:
+        print_debug_info(debug, 3, f"{layer_name} is valid")
+        old_file = parse_layer_to_dataframe(layer)
+        #load_layer_as_dataframe(file_save_path, layer_name=layer_name)
         if not old_file.empty :
             #pd.DataFrame(gpd.read_file(file_save_path, layer=layer_name))
 
@@ -151,6 +163,7 @@ def save_global_status(status_df: pd.DataFrame,
             old_file_light = old_file.drop(columns=colonnes_a_supprimer)
             
             # Fusion : priorise les clés communes et conserve les lignes valides
+            # Si la sauvegarde est régionale
             if save_type == regional_value:
                 status_merged_heavy = pd.merge(old_file_light, status_df, on=col_to_check, how='outer')
                 print_debug_info(debug, 3, f"Pour {taxon_title} : les colonnes de merged heavy sont {status_merged_heavy.columns}")
@@ -158,7 +171,8 @@ def save_global_status(status_df: pd.DataFrame,
                 # Colonnes à tester pour la suppression des lignes vides après fusion (axis=0)
                 subset_col_dropna = [col for col in status_merged_heavy.columns if col not in col_to_check]
                 status_merged = status_merged_heavy.dropna(axis=0, how="all", subset=subset_col_dropna)
-
+            
+            # Si la sauvegarde n'est pas régionale : nationale
             else:
                 status_merged = pd.merge(old_file_light, status_df, on=col_to_check, how='outer')
 
@@ -172,7 +186,7 @@ def save_global_status(status_df: pd.DataFrame,
             status_na_dropped = status_df.dropna(axis=1, how="all")
 
     else:
-        print_debug_info(debug, 3, f"{layer_name} not in {available_layers}")
+        print_debug_info(debug, 3, f"{layer_name} is not Valid")
         # Si aucune couche existante, on nettoie juste les colonnes vides (axis=1)
         status_na_dropped = status_df.dropna(axis=1, how="all")
 
