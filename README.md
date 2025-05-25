@@ -28,6 +28,8 @@ Les statuts pris en compte incluent : Directive Habitat, Directive Oiseaux, Prot
 
 Le programme ajoute une couche `Sources` dans le GeoPackage `Données` qui permet de vérifier les mises à jour des statuts. Cette couche ne doit pas être supprimée.
 
+Avant d'appliquer une mise à jour, le programme demande à l’utilisateur ou à l’utilisatrice s’il ou elle souhaite enregistrer les statuts par région dans des fichiers CSV.
+
 ## 🔗 Compatibilité
 * Compatible avec QGIS sur les projets QBiome, QFlore, QFaune et tout autre projet QField naturaliste possédant les GeoPackages `Données` et `Statuts`.
 
@@ -35,6 +37,8 @@ Le programme ajoute une couche `Sources` dans le GeoPackage `Données` qui perme
 Recherchez et installez le plugin directement depuis le gestionnaire d'extensions de QGIS en tapant "AutoUpdateTAXREF".
 
 ## 🗃️ Catégorisation TAXREF des espèces gérées par AutoUpdateTAXREF :
+Types de présence : P, E, S, C, I, J, M, B, D, G
+
 🌿 Flore
 * GROUP1_INPN : Algues, Bryophytes, Trachéophytes
 
@@ -56,6 +60,8 @@ Recherchez et installez le plugin directement depuis le gestionnaire d'extension
 * Lepidoptères : Familles Papilionidae, Pieridae, Nymphalidae, Satyrinae, Lycaenidae, Hesperiidae, Zygaenidae
 * Coleoptères : Familles Carabidae, Hydrophilidae, Sphaeritidae, Histeridae, Ptiliidae, Agyrtidae, Leiodidae, Staphylinidae, Lucanidae, Trogidae, Scarabaeidae, Eucinetidae, Clambidae, Scirtidae, Buprestidae, Elmidae, Dryopidae, Cerophytidae, Eucnemidae, Throscidae, Elateridae, Lycidae, Cantharidae, Derodontidae, Nosodendridae, Dermestidae, Endecatomidae, Bostrichidae, Ptinidae, Lymexylidae, Phloiophilidae, Trogossitidae, Thanerocleridae, Cleridae, Acanthocnemidae, Melyridae, Malachiidae, Sphindidae, Nitidulidae, Monotomidae, Phloeostichidae, Silvanidae, Cucujidae, Laemophloeidae, Cryptophagidae, Erotylidae, Biphyllidae, Bothrideridae, Cerylonidae, Alexiidae, Endomychidae, Corylophidae, Latridiidae, Mycetophagidae, Ciidae, Tetratomidae, Melandryidae, Zopheridae, Mordellidae, Tenebrionidae, Prostomidae, Oedemeridae, Pythidae, Pyrochroidae, Salpingidae, Aderidae, Scraptiidae, Cerambycidae, Chrysomelidae, Anthribidae, Brentidae, Dryophthoridae, Curculionidae
 * Ephémères : Ordre Ephemeroptera
+
+🕷 Autres arthropodes
 * Araignées : GROUP3_INPN Araignées, Opilions, Pseudoscorpions, Scorpions
 * Crustacés : GROUP2_INPN Crustacés
   

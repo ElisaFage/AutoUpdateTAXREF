@@ -255,10 +255,13 @@ def do_save_excel(save_excel: bool,
         filename = f'{locName.title().replace(" ", "")}_{status.type_id}_{taxon_title}.csv'
         csv_path = os.path.join(folder_excel, filename)
 
-        # Supprime l'ancien fichier s'il existe
+        # Fusion avec l'ancien fichier s'il existe
         if os.path.isfile(csv_path):
-            os.remove(csv_path)
-        status_data[condition_location_name].to_csv(csv_path, sep=";", encoding="utf-8", index=False)
+            old_csv = pd.read_csv(csv_path, sep=";", encoding="utf-8")
+            new_csv = pd.concat([old_csv, status_data[condition_location_name]], ignore_index=True).drop_duplicates()
+            new_csv.to_csv(csv_path, sep=";", encoding="utf-8", index=False)
+        else:
+            status_data[condition_location_name].to_csv(csv_path, sep=";", encoding="utf-8", index=False)
 
     return
 

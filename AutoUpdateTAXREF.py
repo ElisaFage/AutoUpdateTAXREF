@@ -207,6 +207,6 @@ class AutoUpdateTAXREF :
         project_path = os.path.dirname(QgsProject.instance().fileName())
         self.update_controller = UpdateController(
             project_path=project_path,
-            debug=3)
+            debug=1)
 
     
