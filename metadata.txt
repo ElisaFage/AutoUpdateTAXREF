@@ -5,15 +5,15 @@
 [general]
 name=AutoUpdateTAXREF
 qgisMinimumVersion=3.0
-description=Automatic update of the new version of TAXREF and species status
-version=0.1
+description=Plugin QGIS pour la mise à jour automatique des espèces et statuts via l'API TAXREF de l'INPN
+version=1.0
 author=É. FAGE, C. ALLÉNÉ
 email=elisa_fage@hotmail.fr
 
-about=Automatic update of the new version of TAXREF and species status
+about=AutoUpdateTAXREF est un plugin QGIS qui permet d'automatiser la mise à jour des espèces et de leurs statuts directement depuis l'API TAXREF fournie par l'INPN. Ce plugin simplifie la mise à jour des espèces et de leurs statuts dans des projets QGIS comme QBiome, QFlore, QFaune ou tout autre projet QField naturaliste.
 
-tracker=http://bugs
-repository=http://repo
+tracker=https://github.com/ElisaFage/AutoUpdateTAXREF/issues
+repository=https://github.com/ElisaFage/AutoUpdateTAXREF.git
 # End of mandatory metadata
 
 # Recommended items:
@@ -23,9 +23,9 @@ hasProcessingProvider=no
 # changelog=
 
 # Tags are comma separated with spaces allowed
-tags=python
+tags=python,QField naturaliste,TAXREF
 
-homepage=http://homepage
+homepage=https://github.com/ElisaFage/AutoUpdateTAXREF.git
 category=Plugins
 icon=icon.png
 # experimental flag
@@ -40,7 +40,7 @@ deprecated=False
 # plugin_dependencies=
 
 Category of the plugin: Raster, Vector, Database or Web
-# category=
+# category=Database
 
 # If the plugin can run on QGIS Server.
 server=False
