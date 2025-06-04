@@ -8,7 +8,7 @@ Ce plugin simplifie la mise à jour des espèces et de leurs statuts dans des pr
 ## 📋 Prérequis
 - Un projet QGIS contenant un fichier GeoPackage nommé `Donnees`.
 - Ce GeoPackage et ce projet doivent contenir au moins une couche dont le nom correspond exactement à un taxon à mettre à jour. Les noms des couches à l'intérieur du GeoPackage `Donnees` doivent être au singulier, sans accent et avec une majuscule initiale. Voici la liste précise des taxons pris en charge : Amphibien, Avifaune, Araignee, Coleoptere, Crustace, Ephemere, Mammifere, Mollusque, Odonates, Orthoptere, Poisson, Reptile, Chiroptere, Lepidoptere, Flore, Fonge.
-- Ces couches doivent être chargées dans le projet QGIS..
+- Ces couches doivent être chargées dans le projet QGIS.
 - Avoir une connexion internet pour que le programme accède à l'API de TAXREF.
 
 ## ⚙️ Fonctionnement
