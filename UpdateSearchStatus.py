@@ -152,8 +152,8 @@ class SourcesManager():
         # Filtrer les sources absentes
         new_sources = currentSources[currentSources["id"].astype(str).isin(ids_absents["id"].astype(str).values)][self.required_columns].copy()
 
-        print_debug_info(self.debug, 1, f"Les id presents sont : {currentSources["id"].values}")
-        print_debug_info(self.debug, 1, f"Les id absents sont : {ids_absents["id"].values}")
+        print_debug_info(self.debug, 1, f"Les id presents sont : {currentSources['id'].values}")
+        print_debug_info(self.debug, 1, f"Les id absents sont : {ids_absents['id'].values}")
 
         self.new_sources = new_sources
 
