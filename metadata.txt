@@ -6,7 +6,7 @@
 name=AutoUpdateTAXREF
 qgisMinimumVersion=3.0
 description=Plugin QGIS pour la mise à jour automatique des espèces et statuts via l'API TAXREF de l'INPN
-version=1.0
+version=1.0.1
 author=É. FAGE, C. ALLÉNÉ
 email=elisa_fage@hotmail.fr
 
